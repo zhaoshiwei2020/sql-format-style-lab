@@ -1,0 +1,12 @@
+insert overwrite table style_lab.order_daily_summary
+partition (dt = '2026-08-19')
+select
+    region_code,
+    product_type,
+    count(*) as order_count,
+    sum(amount) as total_amount
+from style_lab.order_wide_table
+where dt = '2026-08-19'
+group by
+    region_code,
+    product_type;

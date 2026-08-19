@@ -1,0 +1,248 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://example.invalid/sqlstyle.schema.json",
+  "title": "SQL Style Calibrator 配置（.sqlstyle.jsonc）",
+  "description": "Hive SQL Style Calibrator 的风格配置文件。镜像 packages/core/src/profile.ts 中的 StyleProfile 类型；只暴露经过验证的语义化选项，不提供任意布局 DSL（见 ARCHITECTURE.md §9）。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "dialect", "dialectVersion", "mode", "unsupportedBehavior"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "指向本 Schema 文件的路径，供编辑器做 JSON Schema 校验与自动补全，不参与格式化逻辑。"
+    },
+    "version": {
+      "type": "integer",
+      "const": 1,
+      "default": 1,
+      "description": "配置文件格式版本。当前唯一支持的值为 1；版本不为 1 时会记为 CFG001 错误并回退到内置默认值。"
+    },
+    "dialect": {
+      "type": "string",
+      "enum": ["hive"],
+      "default": "hive",
+      "description": "SQL 方言。S1 仅支持 hive（HiveQL），Spark 等方言延后到后续阶段。"
+    },
+    "dialectVersion": {
+      "type": "string",
+      "default": "1.1",
+      "description": "方言的具体版本号，用于避免把仅存在于新版本的关键字误判为旧版本语法（如 Hive 1.1 的兼容基线）。"
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["canonical"],
+      "default": "canonical",
+      "description": "格式化模式。S1 只提供 canonical（规范化）模式：相同 token、方言版本与 profile 始终收敛到唯一输出；不提供“尽量保留原布局”的第二套模式。"
+    },
+    "unsupportedBehavior": {
+      "type": "string",
+      "enum": ["leave-document-unchanged"],
+      "default": "leave-document-unchanged",
+      "description": "遇到 VALID_UNSUPPORTED / INVALID / UNKNOWN 时的行为。S1 固定为整篇文档原子性：不改动源文件，只给出诊断信息。"
+    },
+    "indent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["style", "size"],
+      "description": "缩进规则。",
+      "properties": {
+        "style": {
+          "type": "string",
+          "enum": ["space"],
+          "default": "space",
+          "description": "缩进字符类型。当前仅支持空格缩进。"
+        },
+        "size": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 4,
+          "description": "每级缩进使用的空格数。"
+        }
+      }
+    },
+    "lineWidth": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 100,
+      "description": "期望的最大行宽（字符数）。用于 layout solver 判断是否需要换行展开语法结构。"
+    },
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["shortWhen", "wrappedWhen", "nestedCase"],
+      "description": "CASE 表达式的排版规则。",
+      "properties": {
+        "shortWhen": {
+          "type": "string",
+          "enum": ["single-line"],
+          "default": "single-line",
+          "description": "当整个 WHEN 子句能放进一行时，保持 `when condition then result` 单行书写。"
+        },
+        "wrappedWhen": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["layout", "logicalOperator", "then"],
+          "description": "WHEN 子句放不下需要换行时的排版规则。",
+          "properties": {
+            "layout": {
+              "type": "string",
+              "enum": ["when-own-line"],
+              "default": "when-own-line",
+              "description": "换行时 `when` 关键字独占一行，条件缩进一级。"
+            },
+            "logicalOperator": {
+              "type": "string",
+              "enum": ["leading-indented"],
+              "default": "leading-indented",
+              "description": "多个条件之间的 `and`/`or` 作为行首逻辑运算符，并缩进对齐。"
+            },
+            "then": {
+              "type": "string",
+              "enum": ["align-with-when"],
+              "default": "align-with-when",
+              "description": "`then` 子句与 `when` 对齐排版。"
+            }
+          }
+        },
+        "nestedCase": {
+          "type": "string",
+          "enum": ["indent-one-level"],
+          "default": "indent-one-level",
+          "description": "CASE 嵌套在另一个 CASE 内部时的缩进方式：整体再缩进一级。"
+        }
+      }
+    },
+    "functionCall": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "wrapStrategy",
+        "wrappedArguments",
+        "keepCompactNestedCalls",
+        "closingParenthesis",
+        "keepShortComparisonSideInline"
+      ],
+      "description": "函数调用的换行与参数排版规则。",
+      "properties": {
+        "wrapStrategy": {
+          "type": "string",
+          "enum": ["outermost-first"],
+          "default": "outermost-first",
+          "description": "函数调用放不下一行时，优先展开最外层调用，内层嵌套调用尽量保持紧凑（见 ARCHITECTURE.md §8）。"
+        },
+        "wrappedArguments": {
+          "type": "string",
+          "enum": ["one-per-line"],
+          "default": "one-per-line",
+          "description": "参数列表换行展开时，每个参数独占一行。"
+        },
+        "keepCompactNestedCalls": {
+          "type": "boolean",
+          "default": true,
+          "description": "外层函数调用展开后，只要内层嵌套调用自身能放进一行，就保持紧凑，不随外层强制展开。"
+        },
+        "closingParenthesis": {
+          "type": "string",
+          "enum": ["own-line"],
+          "default": "own-line",
+          "description": "函数调用展开时，右括号是否独占一行。"
+        },
+        "keepShortComparisonSideInline": {
+          "type": "boolean",
+          "default": true,
+          "description": "比较表达式一侧展开换行时，只要另一侧（如短小的 concat(...)）本身能放进一行，就不随之连带展开。"
+        }
+      }
+    },
+    "select": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["multipleItems", "comma"],
+      "description": "SELECT 列表的排版规则。",
+      "properties": {
+        "multipleItems": {
+          "type": "string",
+          "enum": ["one-per-line"],
+          "default": "one-per-line",
+          "description": "SELECT 列表包含多列时，每列独占一行。"
+        },
+        "comma": {
+          "type": "string",
+          "enum": ["trailing"],
+          "default": "trailing",
+          "description": "列表项之间逗号的位置：置于当前行末尾（而非下一行行首）。"
+        }
+      }
+    },
+    "booleanGroup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["compactMaxWidth"],
+      "description": "带括号的布尔子表达式分组排版规则。",
+      "properties": {
+        "compactMaxWidth": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 50,
+          "description": "带括号的布尔子表达式分组只有在展开后的单行宽度不超过该值时才保持单行紧凑（且未嵌套在已展开的括号分组内）；超过则展开。语料参考：约 46 字符的分组在最外层保持紧凑，约 60+ 字符的分组总是展开。"
+        }
+      }
+    },
+    "keywordCase": {
+      "$ref": "#/definitions/casePolicy",
+      "default": "lower",
+      "description": "关键字（如 select、from、where）的大小写策略。"
+    },
+    "functionCase": {
+      "$ref": "#/definitions/casePolicy",
+      "default": "lower",
+      "description": "函数名的大小写策略。"
+    },
+    "dataTypeCase": {
+      "$ref": "#/definitions/casePolicy",
+      "default": "lower",
+      "description": "数据类型名（如 string、bigint）的大小写策略。"
+    },
+    "semicolon": {
+      "type": "string",
+      "enum": ["same-line"],
+      "default": "same-line",
+      "description": "语句末尾分号的位置：与最后一个 token 同行。"
+    },
+    "maxConsecutiveBlankLines": {
+      "type": "integer",
+      "minimum": 0,
+      "default": 2,
+      "description": "仅在语句之间以及独占一行的注释之前允许保留的最大连续空行数（有界地偏离严格规范化空白；语句内部空白仍完全规范化）。"
+    },
+    "templates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["preserve", "customPatterns"],
+      "description": "模板占位符（如 ${hiveconf:month}）的处理规则。",
+      "properties": {
+        "preserve": {
+          "type": "boolean",
+          "const": true,
+          "default": true,
+          "description": "模板占位符必须原样保留，不参与格式化改写。当前恒为 true。"
+        },
+        "customPatterns": {
+          "type": "array",
+          "default": [],
+          "description": "用户自定义的模板占位符正则表达式列表，用于在内置四种形式（${...}、#{...}、{{ ... }}、{% ... %}）之外识别更多占位符。正则表达式必须有超时与长度保护，避免灾难性回溯。",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "casePolicy": {
+      "type": "string",
+      "enum": ["lower", "upper", "preserve"],
+      "description": "大小写策略：lower（转小写）、upper（转大写）、preserve（保留原文大小写）。"
+    }
+  }
+}

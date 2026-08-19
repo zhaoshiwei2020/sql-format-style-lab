@@ -1,0 +1,25 @@
+select
+    order_id,
+    customer_id,
+    payment_time,
+    amount,
+    row_number() over (
+        partition by customer_id
+        order by payment_time desc, order_id desc
+    ) as payment_sequence,
+    lag(amount, 1, 0) over (
+        partition by customer_id
+        order by payment_time, order_id
+    ) as previous_amount,
+    sum(amount) over (
+        partition by customer_id
+        order by payment_time, order_id
+        rows between unbounded preceding and current row
+    ) as cumulative_amount,
+    avg(amount) over (
+        partition by customer_id
+        order by payment_time
+        rows between 6 preceding and current row
+    ) as moving_average_7_orders
+from style_lab.fact_order
+where dt between '2026-08-01' and '2026-08-19';

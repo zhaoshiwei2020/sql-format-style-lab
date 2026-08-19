@@ -1,0 +1,8 @@
+# Local or generated project-handoff state
+/digest.md
+/checkpoints/
+/runtime/
+/cache/
+/migrations/
+/.tmp-*
+/.write-lock/

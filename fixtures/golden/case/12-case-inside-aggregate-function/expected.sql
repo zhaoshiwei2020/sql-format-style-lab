@@ -1,0 +1,38 @@
+select
+    report_month,
+    sum(
+        case
+            when
+                source_order_id is not null
+                and target_order_id is not null
+                and (
+                    coalesce(source_customer_id, '__NULL__')
+                        <> coalesce(target_customer_id, '__NULL__')
+                    or coalesce(source_status, -999999)
+                        <> coalesce(target_status, -999999)
+                    or coalesce(source_created_time, '__NULL__')
+                        <> coalesce(target_created_time, '__NULL__')
+                    or coalesce(source_amount, 0)
+                        <> coalesce(target_amount, 0)
+                )
+            then 1
+            else 0
+        end
+    ) as mismatch_count,
+    max(
+        case
+            when
+                tax_status <> 'not_started'
+                and abs(
+                    contract_liability_closing
+                    - closing_balance / (1 + tax_rate)
+                ) > 0.01
+            then abs(
+                contract_liability_closing
+                - closing_balance / (1 + tax_rate)
+            )
+            else 0
+        end
+    ) as maximum_difference
+from style_lab.complex_case_source
+group by report_month;

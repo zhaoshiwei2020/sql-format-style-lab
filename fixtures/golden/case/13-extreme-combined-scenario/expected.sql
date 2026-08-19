@@ -1,0 +1,48 @@
+select
+    order_id,
+    product_id,
+    case
+        when
+            coalesce(source_system, '') in ('order', 'refund', 'adjustment')
+            and substr(event_time, 1, 10) between
+                concat(report_month, '-01')
+                and cast(last_day(concat(report_month, '-01')) as string)
+            and (
+                event_status = 'completed'
+                or (
+                    event_status = 'refunded'
+                    and coalesce(refund_amount, 0) > 0
+                )
+                or (
+                    event_status = 'adjusted'
+                    and abs(coalesce(adjustment_amount, 0)) > 0.01
+                )
+            )
+            and count(
+                if(event_status in ('completed', 'refunded'), 1, null)
+            ) over (
+                partition by order_id, product_id
+            ) >= 1
+        then round(
+            coalesce(opening_balance, 0)
+            + coalesce(purchase_amount, 0)
+            - coalesce(refund_amount, 0)
+            + case
+                when product_type = 'course' then lesson_revenue
+                when product_type = 'physical' then
+                    case
+                        when sign_time is not null then physical_revenue
+                        else 0
+                    end
+                else coalesce(manual_adjustment, 0)
+            end
+            - sum(
+                coalesce(history_revenue, 0)
+            ) over (
+                partition by order_id
+            ),
+            2
+        )
+        else 0
+    end as final_revenue
+from style_lab.complex_case_source;

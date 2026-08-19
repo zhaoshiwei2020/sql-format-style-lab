@@ -1,0 +1,21 @@
+select
+    o.order_id,
+    o.customer_id,
+    c.customer_name,
+    c.customer_level,
+    p.payment_channel,
+    r.refund_amount,
+    coalesce(r.refund_amount, 0) as refund_amount_filled
+from style_lab.fact_order as o
+inner join style_lab.dim_customer as c
+    on o.customer_id = c.customer_id
+    and c.is_current = 1
+left join style_lab.fact_payment as p
+    on o.order_id = p.order_id
+    and p.payment_status = 'success'
+left join style_lab.fact_refund as r
+    on o.order_id = r.order_id
+    and r.refund_status = 'completed'
+where
+    o.dt = '2026-08-19'
+    and o.is_test_order = false;

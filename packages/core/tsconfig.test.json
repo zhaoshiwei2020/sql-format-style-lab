@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "composite": false,
+    "noEmit": true
+  },
+  "include": [
+    "src",
+    "test/golden.test.ts",
+    "test/unsupported.test.ts",
+    "scripts/dev-format.ts",
+    "scripts/coverage-report.ts",
+    "types"
+  ]
+}

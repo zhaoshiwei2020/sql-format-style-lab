@@ -1,0 +1,1 @@
+select /*+ broadcast(c), repartition(200, o.dt) */ o.order_id, o.customer_id, c.customer_name from style_lab.fact_order as o left join style_lab.dim_customer as c on o.customer_id = c.customer_id distribute by o.dt sort by o.customer_id, o.order_id;

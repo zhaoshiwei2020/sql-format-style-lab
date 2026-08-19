@@ -1,0 +1,20 @@
+select
+    order_id,
+    case
+        when
+            special_order_id is not null
+            and report_month = '2026-08'
+            and apportioned_payment > 0
+            and opening_balance <> 0
+            and current_period_revenue = 0
+        then opening_balance
+        when
+            special_order_id is not null
+            and report_month = '2026-08'
+            and apportioned_payment > 0
+            and actual_balance <> 0
+            and sign_time is not null
+        then actual_balance
+        else current_period_revenue
+    end as adjusted_revenue
+from style_lab.complex_case_source;

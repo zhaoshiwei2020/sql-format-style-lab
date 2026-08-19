@@ -1,0 +1,60 @@
+{
+  "name": "sql-style-calibrator",
+  "displayName": "SQL Style Calibrator",
+  "description": "Deterministic, local Hive SQL formatter driven by a calibrated .sqlstyle.jsonc profile.",
+  "private": true,
+  "version": "0.0.1",
+  "publisher": "local",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": ["Formatters"],
+  "activationEvents": ["onLanguage:sql"],
+  "main": "./dist/extension.cjs",
+  "contributes": {
+    "languages": [
+      {
+        "id": "sql",
+        "extensions": [".hql"]
+      }
+    ],
+    "commands": [
+      {
+        "command": "sqlstyle.previewFormatting",
+        "title": "SQL Style: Preview Formatting"
+      },
+      {
+        "command": "sqlstyle.showUnsupported",
+        "title": "SQL Style: Show Unsupported Syntax"
+      },
+      {
+        "command": "sqlstyle.debugParse",
+        "title": "SQL Style: Debug Parse"
+      },
+      {
+        "command": "sqlstyle.openProfile",
+        "title": "SQL Style: Open Style Profile"
+      }
+    ],
+    "jsonValidation": [
+      {
+        "fileMatch": ["**/.sqlstyle.jsonc"],
+        "url": "./schema/sqlstyle.schema.json"
+      }
+    ]
+  },
+  "dependencies": {
+    "@sqlstyle/core": "*"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.90.0",
+    "@types/node": "^22.0.0",
+    "esbuild": "latest"
+  },
+  "scripts": {
+    "prebuild": "node -e \"require('node:fs').mkdirSync('schema',{recursive:true});require('node:fs').copyFileSync('../../packages/core/schema/sqlstyle.schema.json','schema/sqlstyle.schema.json')\"",
+    "build": "node esbuild.config.mjs",
+    "prewatch": "npm run prebuild",
+    "watch": "node esbuild.config.mjs --watch"
+  }
+}
