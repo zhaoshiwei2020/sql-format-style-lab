@@ -14,13 +14,6 @@
 - Next action: 用户逐题选 A/B 后，按选项修改并把 golden 收敛到 13/13
 - Blocker: 需用户决策（审美主观项，不可代答）
 
-### T-0002｜推送 GitHub 仓库
-- Status: in_progress
-- Inputs: https://github.com/zhaoshiwei2020/sql-format-style-lab.git（用户已建好）
-- Output: main 分支含全部代码 + handoff 可移植状态
-- Next action: git init → 根 .gitignore → commit → push
-- Blocker: none
-
 ### T-0003｜dogfood 准备
 - Status: pending
 - Inputs: apps/vscode（F5 调试，formatter id `local.sql-style-calibrator`）
