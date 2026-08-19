@@ -7,10 +7,7 @@ select
             and expected_balance <> 0
             and (
                 sign_time is null
-                or (
-                    sign_time is not null
-                    and actual_balance = 0
-                )
+                or (sign_time is not null and actual_balance = 0)
             )
         then 0
         when

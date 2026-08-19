@@ -23,7 +23,7 @@ JSON Schema 见 `packages/core/schema/sqlstyle.schema.json`。字段含义与 v1
 | `dialectVersion` | string | `"1.1"` | 自由字符串 | 方言的具体版本号，避免把仅存在于新版本的关键字误判为旧版本语法。 |
 | `mode` | string | `"canonical"` | `"canonical"`（固定值） | 格式化模式。S1 只提供规范化模式：相同 token/方言版本/profile 恒定收敛到同一输出，不提供"尽量保留原布局"模式。 |
 | `unsupportedBehavior` | string | `"leave-document-unchanged"` | `"leave-document-unchanged"`（固定值） | 遇到 `VALID_UNSUPPORTED`/`INVALID`/`UNKNOWN` 时的行为：整篇文档原子性，不改动源文件，只给出诊断。 |
-| `lineWidth` | integer | `100` | 任意正整数 | 期望的最大行宽（字符数），驱动 layout solver 的换行决策。 |
+| `lineWidth` | integer | `78` | 任意正整数 | 期望的最大行宽（字符数），驱动 layout solver 的换行决策。78 为语料宽度扫描的实证最优（校准题 Q1，暂定，dogfood 后可再调）。 |
 | `keywordCase` | string | `"lower"` | `"lower"` \| `"upper"` \| `"preserve"` | 关键字（`select`/`from`/`where` 等）大小写策略。 |
 | `functionCase` | string | `"lower"` | `"lower"` \| `"upper"` \| `"preserve"` | 函数名大小写策略。 |
 | `dataTypeCase` | string | `"lower"` | `"lower"` \| `"upper"` \| `"preserve"` | 数据类型名（`string`/`bigint` 等）大小写策略。 |
@@ -68,7 +68,7 @@ JSON Schema 见 `packages/core/schema/sqlstyle.schema.json`。字段含义与 v1
 
 | Key | 类型 | 默认值 | 允许值 | 中文说明 |
 |---|---|---|---|---|
-| `booleanGroup.compactMaxWidth` | integer | `50` | 任意正整数 | 带括号的布尔子表达式分组，只有展开后单行宽度不超过该值、且未嵌套在已展开的括号分组内时才保持紧凑；否则展开。语料参考：约 46 字符的分组在最外层保持紧凑，约 60+ 字符的分组总是展开。 |
+| `booleanGroup.compactMaxWidth` | integer | `54` | 任意正整数 | 带括号的布尔子表达式分组，展开后单行宽度不超过该值即保持紧凑（任意嵌套深度独立判断，校准题 Q5 已拍板）；否则展开。语料实证：[52, 56] 内任意值均 42/42 复现，54 为窗口中点。 |
 
 ## `templates`（模板占位符）
 

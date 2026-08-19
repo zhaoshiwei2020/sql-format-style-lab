@@ -19,7 +19,11 @@ select
         )
         else round(
             cast(
-                if(previous_closing_balance is not null, 0, apportioned_payment) as decimal(18, 2)
+                if(
+                    previous_closing_balance is not null,
+                    0,
+                    apportioned_payment
+                ) as decimal(18, 2)
             )
             - case
                 when
@@ -29,7 +33,11 @@ select
                 else apportioned_refund
             end
             + cast(
-                if(previous_closing_balance is null, 0, previous_closing_balance) as decimal(18, 2)
+                if(
+                    previous_closing_balance is null,
+                    0,
+                    previous_closing_balance
+                ) as decimal(18, 2)
             ),
             2
         )

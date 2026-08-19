@@ -9,11 +9,7 @@ select
             apportioned_amount
             + order_adjustment
             - sum(
-                if(
-                    split_type in ('physical', 'gift'),
-                    apportioned_amount,
-                    0
-                )
+                if(split_type in ('physical', 'gift'), apportioned_amount, 0)
             ) over (
                 partition by order_id
             ),

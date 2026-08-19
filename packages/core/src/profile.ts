@@ -47,9 +47,10 @@ export interface StyleProfile {
 
   /**
    * Parenthesized boolean sub-chains stay on one line only when their flat
-   * width is within this cap (and they are not nested inside an already
-   * broken parenthesized group). Derived from the corpus: ~46-char groups
-   * stay compact at top nesting level, ~60+ char groups always expand.
+   * width is within this cap, judged independently at any nesting depth
+   * (calibration Q5, user-decided 2026-08-19). Empirical: any value in
+   * [52, 56] reproduces 42/42 corpus fixtures (52-char groups stay flat,
+   * 57+-char groups expand); 54 is the window midpoint.
    */
   booleanGroup: {
     compactMaxWidth: number;
@@ -105,7 +106,7 @@ export const DEFAULT_PROFILE: StyleProfile = {
     multipleItems: "one-per-line",
     comma: "trailing",
   },
-  booleanGroup: { compactMaxWidth: 50 },
+  booleanGroup: { compactMaxWidth: 54 },
   keywordCase: "lower",
   functionCase: "lower",
   dataTypeCase: "lower",

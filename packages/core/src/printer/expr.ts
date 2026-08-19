@@ -6,9 +6,10 @@
  *   its own line; outermost-first expansion falls out of nested groups.
  * - Boolean chains: flat when they fit; otherwise one operand per line with
  *   the operator leading the line at the same indent level.
- * - Parenthesized boolean sub-chains: stay flat only when their flat width is
- *   ≤ booleanGroup.compactMaxWidth AND they are not nested inside an already
- *   broken parenthesized group ("structural echo").
+ * - Parenthesized boolean sub-chains: stay flat when their flat width is
+ *   ≤ booleanGroup.compactMaxWidth, judged independently at any nesting depth
+ *   (calibration Q5, 2026-08-19: the old "structural echo" rule — force-break
+ *   when inside an already broken paren — was dropped by user decision).
  * - Additive chains (+/-): broken form is operator-leading lines.
  * - Multiplicative chains (*, /, %): never move operators to a new line;
  *   their parenthesized operands break internally instead.
@@ -244,7 +245,7 @@ export function makeExprPrinter(qp: QueryPrinter) {
 
     if (isChainInner) {
       const w = flatWidth(flatDoc, ctx);
-      const mustBreak = opts.insideBrokenParen === true || w > ctx.p.booleanGroup.compactMaxWidth;
+      const mustBreak = w > ctx.p.booleanGroup.compactMaxWidth;
       if (mustBreak) return brokenDoc;
       return choice(flatDoc, brokenDoc);
     }
