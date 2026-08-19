@@ -87,3 +87,14 @@
 - Supersedes: none
 - Superseded by: none
 - Consequences: DDL printer 无需改动（实现本就跟随 profile）；后批 DDL 排版异议继续走校准题流程
+
+### D-0009｜校准题 Q7：CASE arm 在 then 前断行（用户，2026-08-19）
+
+- Status: active
+- Decision: 非链条件的 WHEN arm 整行放不下时，优先在 then 前断行（then 独行对齐 when、结果挂 then），不再把断行埋进结果表达式内部；嵌套 case 结果保持原有 attach 形态。case/08、10、11 语料按新规则重生成（首次由 dogfood 反馈反向修订语料——语料不是不可变的，用户实际体感优先）。
+- Reason: dogfood 首日真实反馈：`then substr(` 挂行尾形态可读性差；新规则让 when/then/else 三关键字恒为分支边界锚点。
+- Decided on: 2026-08-19
+- Evidence/inputs: docs/calibration-questions.md Q7, D-0004（流程）, D-0006（Q1~Q5）
+- Supersedes: none
+- Superseded by: none
+- Consequences: printer/expr.ts caseDoc 非链分支改为三段式 choice；case/10 的 81 字符超宽容忍行消除；语料 46/46、测试 276/276 维持全绿

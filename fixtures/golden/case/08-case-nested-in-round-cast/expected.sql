@@ -3,7 +3,8 @@ select
     cast(
         round(
             case
-                when tax_start_month = report_month then (
+                when tax_start_month = report_month
+                then (
                     opening_balance
                     + opening_adjustment
                     + purchase_amount
@@ -12,7 +13,8 @@ select
                 ) * coalesce(tax_rate, 0) / (
                     1 + coalesce(tax_rate, 0)
                 )
-                when tax_start_month < report_month then (
+                when tax_start_month < report_month
+                then (
                     opening_adjustment
                     + purchase_amount
                     - refund_amount

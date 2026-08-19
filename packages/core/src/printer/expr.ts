@@ -374,7 +374,8 @@ export function makeExprPrinter(qp: QueryPrinter) {
           resultAttach(arm.result),
         );
         armDoc = choice(flatArm, expandedArm);
-      } else {
+      } else if (arm.result.kind === "case") {
+        // Nested-case result keeps its dedicated attach (then + indented case).
         armDoc = concat(
           ctx.kw(arm.whenToken),
           text(" "),
@@ -383,6 +384,36 @@ export function makeExprPrinter(qp: QueryPrinter) {
           ctx.kw(arm.thenToken),
           resultAttach(arm.result),
         );
+      } else {
+        // Non-chain condition. `then` must either share the `when` line or
+        // stand on its own line aligned with `when` — never sink into a
+        // broken result call (dogfood feedback 2026-08-19: a trailing
+        // `then substr(` with the break buried in the args reads badly).
+        const flatArm = flatOnly(concat(
+          ctx.kw(arm.whenToken),
+          text(" "),
+          printExpr(arm.condition, ctx),
+          text(" "),
+          ctx.kw(arm.thenToken),
+          resultAttach(arm.result),
+        ));
+        const thenOwnLine = concat(
+          ctx.kw(arm.whenToken),
+          text(" "),
+          flatOnly(printExpr(arm.condition, ctx)),
+          hardline(),
+          ctx.kw(arm.thenToken),
+          resultAttach(arm.result),
+        );
+        const condBreaks = concat(
+          ctx.kw(arm.whenToken),
+          text(" "),
+          group(printExpr(arm.condition, ctx)),
+          text(" "),
+          ctx.kw(arm.thenToken),
+          resultAttach(arm.result),
+        );
+        armDoc = choice(flatArm, thenOwnLine, condBreaks);
       }
       arms.push(armDoc);
     }

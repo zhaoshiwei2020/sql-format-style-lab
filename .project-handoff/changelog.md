@@ -32,3 +32,7 @@
 - VS Code 扩展打包 .vsix 并已安装（local.sql-style-calibrator），README 重写为使用文档。
 - 新增 dogfood-scan CLI 与防泄漏 pre-commit 护栏（.privacy-denylist.local gitignored）。
 - 真实覆盖：ddl 目录 180/181，脚本目录 175/178（F-0008）。测试 276/276，语料 46/46。
+
+## 2026-08-19 18:20 CST
+
+- 编辑器 dogfood 首日反馈闭环：Q7 拍板（then 前断行，D-0009），caseDoc 非链分支重写为三段式 choice，case/08/10/11 语料重生成。旧 formatter（renesaarsoo.sql-formatter-vsc）已卸载，settings.json 的 [sql] 已指向 local.sql-style-calibrator + formatOnSave。vsix 重打包重装。

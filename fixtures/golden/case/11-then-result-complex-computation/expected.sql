@@ -13,10 +13,8 @@ select
             ),
             2
         )
-        when return_time is null then round(
-            unit_revenue * current_completed_lesson_count,
-            2
-        )
+        when return_time is null
+        then round(unit_revenue * current_completed_lesson_count, 2)
         else round(
             cast(
                 if(
