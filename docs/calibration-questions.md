@@ -79,3 +79,21 @@ formatter 按行宽把 if 参数展开了。
 校准信号；拍板落地后 golden 13/13 全绿，无遗留红测试。完整 diff 见
 docs/divergence-report.md（运行
 `node --experimental-strip-types packages/core/scripts/divergence-report.ts` 重新生成）。
+
+---
+
+# 第二批校准题（2026-08-19，DDL）
+
+## Q6: create table 的列缩进用 4 空格还是 2 空格？
+
+> **拍板（2026-08-19）：选 A**，维持 4 空格（全局一个缩进单位）。无代码改动。
+
+DDL 支持落地时的取样：手写 DDL 语料（49 份）列缩进一律 2 空格；但本 formatter
+的 DML 语料与 profile 全局缩进是 4 空格。当前实现跟随 profile（4 空格），保持
+"一个缩进单位"的一致性。
+- A. 维持 4（当前默认，全局一致；DDL 语料的 2 空格视为历史手癖）
+- B. DDL 语句单独用 2 空格（贴合既有 ddl/ 文件，但引入第二种缩进单位）
+
+其余 DDL 排版规则（不做列对齐填充、`) comment '...'` 同行、尾子句一行一个、
+outputformat 换行续行、列注释行豁免行宽）取自手写语料 49 份的多数派，暂不设题；
+不同意见随 dogfood 提出即可。

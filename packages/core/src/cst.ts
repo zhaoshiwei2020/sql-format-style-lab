@@ -33,6 +33,8 @@ export type StatementNode =
   | SelectStatement
   | InsertStatement
   | MultiInsertStatement
+  | CreateTableStatement
+  | DropTableStatement
   | UnsupportedStatement
   | UnknownStatement;
 
@@ -271,6 +273,70 @@ export interface PartitionSpec {
   entries: Token[][];
   commas: Token[];
   rparen: Token;
+}
+
+// ---------------------------------------------------------------------------
+// DDL: CREATE TABLE / DROP TABLE (scope: the Hive shapes in the dogfood
+// corpus — managed tables with serde/stored-as/location/tblproperties tail
+// clauses. Anything outside this shape must fall back to
+// UnsupportedStatement("create-table"), never abort to UNKNOWN.)
+// ---------------------------------------------------------------------------
+
+/**
+ * One column definition: `` `name` type comment '...' ``.
+ * `typeTokens` is the raw balanced run for the type — primitives
+ * (`string`, `decimal ( 18 , 2 )`) and complex types
+ * (`array < struct < a : string > >`) alike; the printer re-glues it.
+ */
+export interface ColumnDef {
+  /** identifier or quotedIdentifier (backtick form is preserved verbatim). */
+  nameToken: Token;
+  typeTokens: Token[];
+  comment?: ColumnComment;
+}
+
+export interface ColumnComment {
+  commentToken: Token;
+  /** the string literal */
+  valueToken: Token;
+}
+
+export interface ColumnList {
+  lparen: Token;
+  columns: ColumnDef[];
+  commas: Token[];
+  rparen: Token;
+}
+
+export interface CreateTableStatement extends StatementBase {
+  kind: "createTableStatement";
+  /** [create, table] plus optional [if, not, exists]; `external` is NOT
+   *  in scope (absent from the corpus) — reject to unsupported instead. */
+  introTokens: Token[];
+  /** table name: identifier/quotedIdentifier tokens with dots, verbatim. */
+  nameTokens: Token[];
+  columnList: ColumnList;
+  /** trailing clauses; all optional, source order is fixed by the grammar.
+   *  Raw token runs (printer re-glues; splits storedAs before OUTPUTFORMAT). */
+  tableComment?: ColumnComment;
+  partitionedBy?: { introTokens: Token[]; columnList: ColumnList };
+  /** `row format serde '...'` (+ optional `with serdeproperties (...)`) */
+  rowFormat?: Token[];
+  /** `stored as orc` | `stored as inputformat '...' outputformat '...'` */
+  storedAs?: Token[];
+  /** [location, '<path>'] */
+  location?: Token[];
+  /** `tblproperties ( 'k' = 'v' , ... )` raw run including parens */
+  tblProperties?: Token[];
+}
+
+export interface DropTableStatement extends StatementBase {
+  kind: "dropTableStatement";
+  /** [drop, table] plus optional [if, exists]. */
+  introTokens: Token[];
+  nameTokens: Token[];
+  /** optional trailing PURGE */
+  purgeToken?: Token;
 }
 
 /** Hive multi-insert: `from src insert overwrite ... select ... insert ...` */

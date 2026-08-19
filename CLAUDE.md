@@ -38,3 +38,7 @@ node --experimental-strip-types packages/core/scripts/coverage-report.ts    # go
 - 窗口 over (...) 规格永远展开；带 over 且参数含嵌套调用的聚合，参数列表强制展开。
 - WHEN 短则单行；条件为链且放不下 → when 独行、then 对齐。
 - where/having 多条件永远展开；join on 首条件同行、后续条件行首对齐。
+
+## 隐私护栏（公开仓库）
+
+本仓库公开。公司内部标识（库名/表名/集群域名/业务词）不得进入任何被 git 跟踪的文件；fixtures 一律用 style_lab.* 合成名。提交前 pre-commit hook 会用 `.privacy-denylist.local`（gitignored，本机各自维护）跑 `tools/check-privacy.sh` 拦截；全量自查跑 `tools/check-privacy.sh --all`。dogfood 批量扫描用 `node --experimental-strip-types packages/core/scripts/dogfood-scan.ts <dir>`（只读、不落盘）。

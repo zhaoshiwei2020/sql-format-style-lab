@@ -13,7 +13,11 @@
 
 import type {
   ByClause,
+  ColumnDef,
+  ColumnList,
+  CreateTableStatement,
   Cte,
+  DropTableStatement,
   Expr,
   FromClause,
   GenericStatement,
@@ -290,6 +294,88 @@ export function makeStmtPrinter(): StmtPrinter {
     return smartJoinTokens(s.tokens, ctx);
   }
 
+  // --- DDL (create table / drop table) ------------------------------------
+  //
+  // Style derived from the hand-written DDL corpus (49 files surveyed):
+  // one column per line, single space between name/type/comment (49-file
+  // majority — only 1 file pads for alignment, so canonical does NOT align),
+  // `) comment '...'` shares the closing-paren line, every tail clause on its
+  // own line with `outputformat` split onto a continuation line. Column lines
+  // are exempt from lineWidth: comment strings are atomic and the corpus
+  // keeps 200+ char comment lines intact. Indent unit follows the profile
+  // (calibration question: hand DDL corpus uses 2 spaces, profile is 4).
+
+  /** Type token run: `decimal(18, 2)`, `array<struct<a:string>>`. Wordy
+   *  tokens get the dataTypeCase policy; space only between two wordy
+   *  tokens and after commas — everything else glues tight. */
+  function typeRunDoc(tokens: Token[], ctx: Ctx): Doc {
+    const parts: Doc[] = [];
+    for (let i = 0; i < tokens.length; i++) {
+      const t = tokens[i]!;
+      const prev = tokens[i - 1];
+      if (prev) {
+        const wordy = (x: Token): boolean => x.kind === "keyword" || x.kind === "identifier";
+        if (prev.kind === "comma" || (wordy(prev) && wordy(t))) parts.push(text(" "));
+      }
+      const isWordy = t.kind === "keyword" || t.kind === "identifier";
+      parts.push(isWordy ? ctx.typeTok(t) : ctx.raw(t));
+    }
+    return concat(...parts);
+  }
+
+  function columnDefDoc(c: ColumnDef, ctx: Ctx): Doc {
+    const parts: Doc[] = [ctx.raw(c.nameToken), text(" "), typeRunDoc(c.typeTokens, ctx)];
+    if (c.comment) {
+      parts.push(text(" "), ctx.kw(c.comment.commentToken), text(" "), ctx.raw(c.comment.valueToken));
+    }
+    return concat(...parts);
+  }
+
+  /** `(a string comment 'x', b string)` — inline; used for partitioned by. */
+  function columnListInlineDoc(l: ColumnList, ctx: Ctx): Doc {
+    return concat(
+      text("("),
+      join(
+        text(", "),
+        l.columns.map((c) => columnDefDoc(c, ctx)),
+      ),
+      text(")"),
+    );
+  }
+
+  function createTableDoc(s: CreateTableStatement, ctx: Ctx): Doc {
+    const parts: Doc[] = [kwRun(s.introTokens, ctx), text(" "), ep.nameDoc(s.nameTokens, ctx), text(" (")];
+    const cols = s.columnList.columns.map((c, i) =>
+      i < s.columnList.columns.length - 1 ? concat(columnDefDoc(c, ctx), text(",")) : columnDefDoc(c, ctx),
+    );
+    parts.push(indent(concat(hardline(), join(hardline(), cols))), hardline(), text(")"));
+    if (s.tableComment) {
+      parts.push(text(" "), ctx.kw(s.tableComment.commentToken), text(" "), ctx.raw(s.tableComment.valueToken));
+    }
+    if (s.partitionedBy) {
+      parts.push(hardline(), kwRun(s.partitionedBy.introTokens, ctx), text(" "), columnListInlineDoc(s.partitionedBy.columnList, ctx));
+    }
+    if (s.rowFormat) parts.push(hardline(), smartJoinTokens(s.rowFormat, ctx));
+    if (s.storedAs) {
+      const splitAt = s.storedAs.findIndex((t) => t.upper === "OUTPUTFORMAT");
+      if (splitAt > 0) {
+        parts.push(hardline(), smartJoinTokens(s.storedAs.slice(0, splitAt), ctx));
+        parts.push(hardline(), smartJoinTokens(s.storedAs.slice(splitAt), ctx));
+      } else {
+        parts.push(hardline(), smartJoinTokens(s.storedAs, ctx));
+      }
+    }
+    if (s.location) parts.push(hardline(), smartJoinTokens(s.location, ctx));
+    if (s.tblProperties) parts.push(hardline(), smartJoinTokens(s.tblProperties, ctx));
+    return concat(...parts);
+  }
+
+  function dropTableDoc(s: DropTableStatement, ctx: Ctx): Doc {
+    const parts: Doc[] = [kwRun(s.introTokens, ctx), text(" "), ep.nameDoc(s.nameTokens, ctx)];
+    if (s.purgeToken) parts.push(text(" "), ctx.kw(s.purgeToken));
+    return concat(...parts);
+  }
+
   function statementDoc(s: StatementNode, ctx: Ctx): Doc {
     let body: Doc;
     switch (s.kind) {
@@ -307,6 +393,12 @@ export function makeStmtPrinter(): StmtPrinter {
         break;
       case "genericStatement":
         body = genericDoc(s, ctx);
+        break;
+      case "createTableStatement":
+        body = createTableDoc(s, ctx);
+        break;
+      case "dropTableStatement":
+        body = dropTableDoc(s, ctx);
         break;
       case "unsupportedStatement":
       case "unknownStatement":

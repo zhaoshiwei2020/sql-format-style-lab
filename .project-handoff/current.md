@@ -1,6 +1,6 @@
 # Current state
 
-- Last updated: 2026-08-19 17:40 CST
+- Last updated: 2026-08-19 17:50 CST
 - Active workstream: formatter 核心（单一工作流）
 - Current objective: 个人 dogfood（ARCHITECTURE Phase 3）：VS Code 实装到日常 Hive SQL 工作流，收集覆盖缺口
 - Current status: 校准题 Q1~Q5 已落地；dogfood CLI 首轮完成——真实库 178 脚本 175 个 VALID_SUPPORTED（F-0007），三个语法缺口已补。测试 259/259，语料 43/43，pending 30/30 全绿。
@@ -11,8 +11,8 @@
 - Status: in-progress
 - Inputs: apps/vscode（F5 调试，formatter id `local.sql-style-calibrator`）；内部数仓真实脚本库（路径见本地会话记忆）
 - Output: 覆盖缺口修复 + 新审美分歧（若有，走 A/B 校准题流程）
-- Progress: CLI 首轮完成（2026-08-19，F-0007）——178 个真实脚本 175 个 VALID_SUPPORTED，三个语法缺口（with+insert / `!` 逻辑非 / 关键字别名）已修复并加测试
-- Next action: VS Code F5 装载插件在编辑器里实际用（保存即格式化体验）；lineWidth 78 是否合适用体感验证（Q1 非终局）；真实输出是否要写回工作仓库由用户决定
+- Progress: CLI 首轮完成（F-0007）；DDL 支持落地（create/drop table，F-0008，Q6 拍板 4 空格缩进）；.vsix 已打包并安装进 VS Code（local.sql-style-calibrator）；dogfood-scan CLI 与防泄漏 pre-commit 护栏就位
+- Next action: 用户在编辑器里日常用（保存即格式化），体感验证 lineWidth 78（Q1 非终局）；已知覆盖候选：CTAS（create temporary table ... as select）与 create table like；真实输出是否写回工作仓库由用户决定
 - Blocker: none
 
 ## Completed recently

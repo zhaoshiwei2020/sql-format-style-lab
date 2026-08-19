@@ -21,6 +21,8 @@ import type {
   BetweenExpr,
   BooleanChain,
   CaseExpr,
+  CreateTableStatement,
+  DropTableStatement,
   Expr,
   FunctionCall,
   InsertStatement,
@@ -324,12 +326,13 @@ describe("golden-pending spark fixtures parse as supported statements", () => {
 
 describe("fixtures/unsupported", () => {
   const files = listSqlFiles(UNSUPPORTED_FIXTURES);
+  const stillUnsupported = files;
 
   it("finds the fixture corpus", () => {
     expect(files.length).toBeGreaterThan(0);
   });
 
-  it.each(files)("%s is never VALID_SUPPORTED", (name) => {
+  it.each(stillUnsupported)("%s is never VALID_SUPPORTED", (name) => {
     const sql = readFileSync(join(UNSUPPORTED_FIXTURES, name), "utf8");
     const state = stateOf(sql);
     expect(["VALID_UNSUPPORTED", "UNKNOWN"]).toContain(state);
@@ -693,5 +696,414 @@ describe("misc expression shapes", () => {
     const outer = expr as { left: Expr; opTokens: Token[]; right: Expr };
     expect(outer.opTokens[0]?.kind).toBe("dot");
     expect(outer.left.kind).toBe("binary");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 6. DDL: CREATE TABLE / DROP TABLE
+// ---------------------------------------------------------------------------
+
+function textsOf(tokens: readonly Token[] | undefined): string[] {
+  return (tokens ?? []).map((t) => t.text);
+}
+
+function uppersOf(tokens: readonly Token[] | undefined): string[] {
+  return (tokens ?? []).map((t) => t.upper);
+}
+
+function createTableOf(sql: string): CreateTableStatement {
+  const stmt = parseOne(sql);
+  expect(stmt.kind).toBe("createTableStatement");
+  return stmt as CreateTableStatement;
+}
+
+function dropTableOf(sql: string): DropTableStatement {
+  const stmt = parseOne(sql);
+  expect(stmt.kind).toBe("dropTableStatement");
+  return stmt as DropTableStatement;
+}
+
+/** Out-of-scope DDL must degrade whole-statement, never to UnknownStatement. */
+function expectUnsupported(sql: string, construct: string): void {
+  const stmt = parseOne(sql);
+  expect(stmt.kind).toBe("unsupportedStatement");
+  expect((stmt as { construct: string }).construct).toBe(construct);
+  expect(stateOf(sql)).toBe("VALID_UNSUPPORTED");
+  expectLossless(sql);
+}
+
+/** Shape 1: `show create table` machine dump — uppercase, backticked db.table. */
+const MACHINE_DUMP = `CREATE TABLE \`style_lab.orders_fd\`(
+  \`order_id\` string COMMENT '订单号', 
+  \`amount\` decimal(12,2) COMMENT '金额')
+COMMENT '订单表'
+PARTITIONED BY ( 
+  \`dt\` string COMMENT '分区')
+ROW FORMAT SERDE 
+  'org.apache.hadoop.hive.ql.io.orc.OrcSerde' 
+STORED AS INPUTFORMAT 
+  'org.apache.hadoop.hive.ql.io.orc.OrcInputFormat' 
+OUTPUTFORMAT 
+  'org.apache.hadoop.hive.ql.io.orc.OrcOutputFormat'
+LOCATION
+  'hdfs://example/warehouse/style_lab.db/orders_fd'
+TBLPROPERTIES (
+  'orc.compress'='SNAPPY', 
+  'transient_lastDdlTime'='1700000000')
+`;
+
+/** Shape 2: hand-written — lowercase, `if not exists`, tail squeezed on one line. */
+const HAND_STYLE = `create table if not exists style_lab.lookup_fm (
+  \`link_id\` string comment '关联 ID',
+  \`tax_month\` string comment '月份 YYYY-MM'
+) comment '查找表' partitioned by (\`dt\` string comment '账期') row format serde 'org.apache.hadoop.hive.ql.io.orc.OrcSerde' stored as inputformat 'org.apache.hadoop.hive.ql.io.orc.OrcInputFormat' outputformat 'org.apache.hadoop.hive.ql.io.orc.OrcOutputFormat' location 'hdfs://example/x' tblproperties ('orc.compress' = 'SNAPPY')
+;
+`;
+
+describe("CREATE TABLE", () => {
+  it("models the machine-dump shape clause by clause", () => {
+    const stmt = createTableOf(MACHINE_DUMP);
+
+    expect(uppersOf(stmt.introTokens)).toEqual(["CREATE", "TABLE"]);
+    // `db.t` inside one pair of backticks stays a single quotedIdentifier.
+    expect(textsOf(stmt.nameTokens)).toEqual(["`style_lab.orders_fd`"]);
+    expect(stmt.nameTokens[0]?.kind).toBe("quotedIdentifier");
+
+    expect(stmt.columnList.columns.length).toBe(2);
+    expect(stmt.columnList.commas.length).toBe(1);
+    expect(stmt.columnList.lparen.kind).toBe("lparen");
+    expect(stmt.columnList.rparen.kind).toBe("rparen");
+
+    const [orderId, amount] = stmt.columnList.columns;
+    expect(orderId?.nameToken.text).toBe("`order_id`");
+    expect(textsOf(orderId?.typeTokens)).toEqual(["string"]);
+    expect(orderId?.comment?.commentToken.upper).toBe("COMMENT");
+    expect(orderId?.comment?.valueToken.text).toBe("'订单号'");
+    expect(textsOf(amount?.typeTokens)).toEqual(["decimal", "(", "12", ",", "2", ")"]);
+
+    expect(stmt.tableComment?.valueToken.text).toBe("'订单表'");
+    expect(uppersOf(stmt.partitionedBy?.introTokens)).toEqual(["PARTITIONED", "BY"]);
+    expect(stmt.partitionedBy?.columnList.columns.length).toBe(1);
+    expect(stmt.partitionedBy?.columnList.columns[0]?.nameToken.text).toBe("`dt`");
+    expect(stmt.partitionedBy?.columnList.columns[0]?.comment?.valueToken.text).toBe("'分区'");
+
+    expect(textsOf(stmt.rowFormat)).toEqual([
+      "ROW",
+      "FORMAT",
+      "SERDE",
+      "'org.apache.hadoop.hive.ql.io.orc.OrcSerde'",
+    ]);
+    expect(textsOf(stmt.storedAs)).toEqual([
+      "STORED",
+      "AS",
+      "INPUTFORMAT",
+      "'org.apache.hadoop.hive.ql.io.orc.OrcInputFormat'",
+      "OUTPUTFORMAT",
+      "'org.apache.hadoop.hive.ql.io.orc.OrcOutputFormat'",
+    ]);
+    expect(textsOf(stmt.location)).toEqual([
+      "LOCATION",
+      "'hdfs://example/warehouse/style_lab.db/orders_fd'",
+    ]);
+    expect(uppersOf(stmt.tblProperties).slice(0, 2)).toEqual(["TBLPROPERTIES", "("]);
+    expect(stmt.tblProperties?.[stmt.tblProperties.length - 1]?.kind).toBe("rparen");
+    expect(stmt.tblProperties?.length).toBe(10);
+
+    expect(stmt.semicolon).toBeUndefined();
+    expect(stateOf(MACHINE_DUMP)).toBe("VALID_SUPPORTED");
+    expectLossless(MACHINE_DUMP);
+  });
+
+  it("models the hand-written shape with `if not exists` and a one-line tail", () => {
+    const stmt = createTableOf(HAND_STYLE);
+
+    expect(uppersOf(stmt.introTokens)).toEqual(["CREATE", "TABLE", "IF", "NOT", "EXISTS"]);
+    // Unquoted `db.t` arrives as three tokens; the run is kept verbatim.
+    expect(textsOf(stmt.nameTokens)).toEqual(["style_lab", ".", "lookup_fm"]);
+    expect(stmt.nameTokens[1]?.kind).toBe("dot");
+
+    expect(stmt.columnList.columns.map((c) => c.nameToken.text)).toEqual([
+      "`link_id`",
+      "`tax_month`",
+    ]);
+    expect(stmt.columnList.columns[1]?.comment?.valueToken.text).toBe("'月份 YYYY-MM'");
+
+    expect(stmt.tableComment?.valueToken.text).toBe("'查找表'");
+    expect(stmt.partitionedBy?.columnList.columns[0]?.nameToken.text).toBe("`dt`");
+    expect(uppersOf(stmt.rowFormat).slice(0, 3)).toEqual(["ROW", "FORMAT", "SERDE"]);
+    expect(uppersOf(stmt.storedAs).slice(0, 3)).toEqual(["STORED", "AS", "INPUTFORMAT"]);
+    expect(textsOf(stmt.location)).toEqual(["location", "'hdfs://example/x'"]);
+    expect(textsOf(stmt.tblProperties)).toEqual([
+      "tblproperties",
+      "(",
+      "'orc.compress'",
+      "=",
+      "'SNAPPY'",
+      ")",
+    ]);
+
+    // The `;` sits on its own line but still belongs to the statement node.
+    expect(stmt.semicolon?.kind).toBe("semicolon");
+    expect(stateOf(HAND_STYLE)).toBe("VALID_SUPPORTED");
+    expectLossless(HAND_STYLE);
+  });
+
+  it("accepts the minimal form: no tail clauses at all", () => {
+    const sql = "create table style_lab.mini_fd (`a` string);";
+    const stmt = createTableOf(sql);
+    expect(stmt.columnList.columns.length).toBe(1);
+    expect(stmt.tableComment).toBeUndefined();
+    expect(stmt.partitionedBy).toBeUndefined();
+    expect(stmt.rowFormat).toBeUndefined();
+    expect(stmt.storedAs).toBeUndefined();
+    expect(stmt.location).toBeUndefined();
+    expect(stmt.tblProperties).toBeUndefined();
+    expectLossless(sql);
+  });
+
+  it("accepts columns without a COMMENT and a bare identifier column name", () => {
+    const sql = "create table style_lab.mini_fd (`a` string, b bigint comment 'b', c int);";
+    const stmt = createTableOf(sql);
+    expect(stmt.columnList.columns.map((c) => c.comment === undefined)).toEqual([
+      true,
+      false,
+      true,
+    ]);
+    expect(stmt.columnList.columns[2]?.nameToken.text).toBe("c");
+    expect(stmt.columnList.commas.length).toBe(2);
+    expectLossless(sql);
+  });
+
+  it("takes decimal(12,2) and decimal(12, 2) as one balanced type run", () => {
+    const tight = createTableOf("create table style_lab.t (`a` decimal(12,2));");
+    const loose = createTableOf("create table style_lab.t (`a` decimal(12, 2));");
+    expect(textsOf(tight.columnList.columns[0]?.typeTokens)).toEqual([
+      "decimal",
+      "(",
+      "12",
+      ",",
+      "2",
+      ")",
+    ]);
+    // Same token run either way — only the source spacing differs.
+    expect(textsOf(loose.columnList.columns[0]?.typeTokens)).toEqual(
+      textsOf(tight.columnList.columns[0]?.typeTokens),
+    );
+    expectLossless("create table style_lab.t (`a` decimal(12, 2));");
+  });
+
+  it("absorbs generic angle brackets, including the `>>` the lexer splits in two", () => {
+    // The lexer has no `>>` operator, so `map<...>>` closes as two `>` tokens.
+    const sql =
+      "create table style_lab.t (" +
+      "`tags` array<string> comment 'tags', " +
+      "`kv` map<string,int>, " +
+      "`nested` array<map<string,int>> comment 'nested', " +
+      "`rec` struct<a:string,b:decimal(18,2)>);";
+    const stmt = createTableOf(sql);
+    const [tags, kv, nested, rec] = stmt.columnList.columns;
+    expect(textsOf(tags?.typeTokens)).toEqual(["array", "<", "string", ">"]);
+    expect(tags?.comment?.valueToken.text).toBe("'tags'");
+    expect(textsOf(kv?.typeTokens)).toEqual(["map", "<", "string", ",", "int", ">"]);
+    expect(textsOf(nested?.typeTokens)).toEqual([
+      "array",
+      "<",
+      "map",
+      "<",
+      "string",
+      ",",
+      "int",
+      ">",
+      ">",
+    ]);
+    expect(nested?.typeTokens.filter((t) => t.text === ">").length).toBe(2);
+    expect(nested?.comment?.valueToken.text).toBe("'nested'");
+    expect(textsOf(rec?.typeTokens)).toEqual([
+      "struct",
+      "<",
+      "a",
+      ":",
+      "string",
+      ",",
+      "b",
+      ":",
+      "decimal",
+      "(",
+      "18",
+      ",",
+      "2",
+      ")",
+      ">",
+    ]);
+    expect(stmt.columnList.columns.length).toBe(4);
+    expectLossless(sql);
+  });
+
+  it("accepts the single-word `stored as orc` form", () => {
+    const sql = "create table style_lab.t (`a` string) stored as orc;";
+    const stmt = createTableOf(sql);
+    expect(textsOf(stmt.storedAs)).toEqual(["stored", "as", "orc"]);
+    expectLossless(sql);
+
+    const parquet = createTableOf(
+      "create table style_lab.t (`a` string) stored as parquet location 'hdfs://example/y';",
+    );
+    expect(uppersOf(parquet.storedAs)).toEqual(["STORED", "AS", "PARQUET"]);
+    expect(textsOf(parquet.location)).toEqual(["location", "'hdfs://example/y'"]);
+  });
+
+  it("keeps `with serdeproperties (...)` inside the row-format run", () => {
+    const sql =
+      "create table style_lab.t (`a` string) row format serde 'com.example.MySerde' " +
+      "with serdeproperties ('field.delim' = '|') stored as orc;";
+    const stmt = createTableOf(sql);
+    expect(textsOf(stmt.rowFormat)).toEqual([
+      "row",
+      "format",
+      "serde",
+      "'com.example.MySerde'",
+      "with",
+      "serdeproperties",
+      "(",
+      "'field.delim'",
+      "=",
+      "'|'",
+      ")",
+    ]);
+    expectLossless(sql);
+  });
+
+  it("falls back to unsupported(create-table) for out-of-scope shapes", () => {
+    expectUnsupported(
+      "create external table style_lab.t (`a` string) stored as orc;",
+      "create-table",
+    );
+    expectUnsupported("create temporary table style_lab.t (`a` string);", "create-table");
+    expectUnsupported("create table style_lab.t like style_lab.u;", "create-table");
+    expectUnsupported("create table style_lab.t as select 1 from style_lab.u;", "create-table");
+    expectUnsupported(
+      "create table style_lab.t (`a` string) clustered by (`a`) into 8 buckets;",
+      "create-table",
+    );
+    expectUnsupported(
+      "create table style_lab.t (`a` string) skewed by (`a`) on ('x');",
+      "create-table",
+    );
+  });
+
+  it("falls back for `row format delimited` (only the SERDE form is modeled)", () => {
+    expectUnsupported(
+      "create table style_lab.t (`a` string) row format delimited fields terminated by '|' " +
+        "stored as textfile;",
+      "create-table",
+    );
+  });
+
+  it("falls back when the tail clauses are out of grammar order", () => {
+    expectUnsupported(
+      "create table style_lab.t (`a` string) location 'hdfs://example/z' comment 'c';",
+      "create-table",
+    );
+    expectUnsupported(
+      "create table style_lab.t (`a` string) stored as orc partitioned by (`dt` string);",
+      "create-table",
+    );
+    expectUnsupported(
+      "create table style_lab.t (`a` string) tblproperties ('k' = 'v') location 'hdfs://e';",
+      "create-table",
+    );
+  });
+
+  it("falls back on a malformed or trailing-garbage statement instead of UNKNOWN", () => {
+    // Every one of these is unmistakably DDL, so UnknownStatement is wrong.
+    for (const sql of [
+      "create table style_lab.t;",
+      "create table (`a` string);",
+      "create table style_lab.t (`a`);",
+      "create table style_lab.t (`a` string) stored as orc extra garbage;",
+      "create table style_lab.t (`a` string comment 42);",
+    ]) {
+      const stmt = parseOne(sql);
+      expect(stmt.kind, sql).toBe("unsupportedStatement");
+      expect((stmt as { construct: string }).construct, sql).toBe("create-table");
+      expectLossless(sql);
+    }
+  });
+
+  it("still refines non-table CREATE statements the old way", () => {
+    expectUnsupported("create database style_lab;", "create-database");
+    expectUnsupported("create view style_lab.v as select 1 from style_lab.t;", "create-view");
+  });
+});
+
+describe("DROP TABLE", () => {
+  it("models the basic form", () => {
+    const sql = "drop table style_lab.orders_fd;";
+    const stmt = dropTableOf(sql);
+    expect(uppersOf(stmt.introTokens)).toEqual(["DROP", "TABLE"]);
+    expect(textsOf(stmt.nameTokens)).toEqual(["style_lab", ".", "orders_fd"]);
+    expect(stmt.purgeToken).toBeUndefined();
+    expect(stmt.semicolon?.kind).toBe("semicolon");
+    expect(stateOf(sql)).toBe("VALID_SUPPORTED");
+    expectLossless(sql);
+  });
+
+  it("models `if exists` and a trailing PURGE", () => {
+    const ifExists = dropTableOf("drop table if exists style_lab.orders_fd;");
+    expect(uppersOf(ifExists.introTokens)).toEqual(["DROP", "TABLE", "IF", "EXISTS"]);
+
+    const purged = dropTableOf("DROP TABLE IF EXISTS `style_lab.orders_fd` PURGE;");
+    expect(uppersOf(purged.introTokens)).toEqual(["DROP", "TABLE", "IF", "EXISTS"]);
+    expect(textsOf(purged.nameTokens)).toEqual(["`style_lab.orders_fd`"]);
+    expect(purged.purgeToken?.upper).toBe("PURGE");
+    expectLossless("DROP TABLE IF EXISTS `style_lab.orders_fd` PURGE;");
+
+    const bare = dropTableOf("drop table style_lab.t purge;");
+    expect(bare.purgeToken?.text).toBe("purge");
+  });
+
+  it("leaves every other DROP untouched", () => {
+    expectUnsupported("drop view if exists style_lab.v;", "drop-view");
+    expectUnsupported("drop database if exists style_lab cascade;", "drop-database");
+    expectUnsupported("drop function if exists style_lab.f;", "drop-function");
+  });
+
+  it("falls back to unsupported(drop-table) on a malformed drop table", () => {
+    expectUnsupported("drop table;", "drop-table");
+    expectUnsupported("drop table style_lab.t cascade;", "drop-table");
+  });
+
+});
+
+describe("DDL statements mix with the rest of a script", () => {
+  it("parses drop + create + insert in one file, losslessly", () => {
+    const sql =
+      "drop table if exists style_lab.scratch_fd;\n" +
+      "create table if not exists style_lab.scratch_fd (\n" +
+      "  `k` string,\n" +
+      "  `v` map<string,bigint> comment '键值对'\n" +
+      ") stored as orc;\n" +
+      "insert overwrite table style_lab.scratch_fd select k, v from style_lab.src_fd;\n";
+    const result = parseSql(sql);
+    expect(result.file.statements.map((s) => s.kind)).toEqual([
+      "dropTableStatement",
+      "createTableStatement",
+      "insertStatement",
+    ]);
+    expect(analyzeCoverage(result).state).toBe("VALID_SUPPORTED");
+    expectLossless(sql);
+  });
+
+  it("keeps an out-of-scope create table from poisoning its neighbours", () => {
+    const sql =
+      "create external table style_lab.ext_fd (`a` string) stored as orc;\n" +
+      "select a from style_lab.ext_fd;\n";
+    const result = parseSql(sql);
+    expect(result.file.statements.map((s) => s.kind)).toEqual([
+      "unsupportedStatement",
+      "selectStatement",
+    ]);
+    expect(analyzeCoverage(result).state).toBe("VALID_UNSUPPORTED");
+    expectLossless(sql);
   });
 });

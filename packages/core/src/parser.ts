@@ -23,7 +23,12 @@ import type {
   ByClause,
   CaseExpr,
   CastExpr,
+  ColumnComment,
+  ColumnDef,
+  ColumnList,
+  CreateTableStatement,
   Cte,
+  DropTableStatement,
   Expr,
   FromClause,
   FunctionCall,
@@ -339,8 +344,18 @@ class StatementParser {
     const first = this.peek();
     if (first === undefined) abort("empty statement");
 
-    const construct = UNSUPPORTED_OPENERS.get(first.upper);
-    if (construct !== undefined) unsupported(this.refineDdlConstruct(construct));
+    const opener = UNSUPPORTED_OPENERS.get(first.upper);
+    if (opener !== undefined) {
+      const construct = this.refineDdlConstruct(opener);
+      // The two DDL shapes the printer models; everything else stays raw.
+      if (construct === "create-table") {
+        return this.guardDdl(construct, () => this.parseCreateTable());
+      }
+      if (construct === "drop-table") {
+        return this.guardDdl(construct, () => this.parseDropTable());
+      }
+      unsupported(construct);
+    }
 
     let node: StatementNode;
     switch (first.upper) {
@@ -1043,6 +1058,205 @@ class StatementParser {
     if (this.upperAt() === "VALUES") unsupported("insert-values");
     branch.body = this.parseQuerySpec();
     return branch as MultiInsertBranch;
+  }
+
+  // --- DDL: CREATE TABLE / DROP TABLE --------------------------------------
+
+  /**
+   * Runs a DDL sub-parser behind a whole-statement fallback.
+   *
+   * A `create table` / `drop table` is unmistakably valid DDL, so it must
+   * never degrade to UnknownStatement: any internal failure — an out-of-scope
+   * clause, an unexpected order, leftover tokens — rewinds the cursor and
+   * re-raises as UnsupportedStatement(construct), whose token run is the whole
+   * statement (assembled by `parseOneStatement`). That keeps the four-state
+   * honesty rule and token completeness trivially true.
+   */
+  private guardDdl<T extends StatementNode>(construct: string, run: () => T): T {
+    const start = this.pos;
+    try {
+      const node = run();
+      if (!this.atEnd()) abort(`unconsumed tokens after ${construct}`);
+      return node;
+    } catch {
+      this.pos = start;
+      unsupported(construct);
+    }
+  }
+
+  /**
+   * `create table [if not exists] name ( cols )` plus the fixed-order tail:
+   * comment → partitioned by → row format → stored as → location →
+   * tblproperties. `external` / `temporary` / `like` / `as select` /
+   * `clustered by` / `skewed by` / `row format delimited` are all outside the
+   * corpus and land in the guard above.
+   */
+  private parseCreateTable(): CreateTableStatement {
+    const introTokens: Token[] = [this.expectUpper("CREATE"), this.expectUpper("TABLE")];
+    if (this.upperAt() === "IF" && this.upperAt(1) === "NOT" && this.upperAt(2) === "EXISTS") {
+      introTokens.push(this.next(), this.next(), this.next());
+    }
+    const nameTokens = this.parseObjectNameTokens();
+    const columnList = this.parseColumnList();
+    const stmt: CreateTableStatement = {
+      kind: "createTableStatement",
+      introTokens,
+      nameTokens,
+      columnList,
+    };
+
+    if (this.upperAt() === "COMMENT") stmt.tableComment = this.parseCommentClause();
+    if (this.upperAt() === "PARTITIONED") {
+      const partIntro: Token[] = [this.next(), this.expectUpper("BY")];
+      stmt.partitionedBy = { introTokens: partIntro, columnList: this.parseColumnList() };
+    }
+    if (this.upperAt() === "ROW") stmt.rowFormat = this.parseRowFormat();
+    if (this.upperAt() === "STORED") stmt.storedAs = this.parseStoredAs();
+    if (this.upperAt() === "LOCATION") {
+      stmt.location = [this.next(), this.expectKind("string", "a LOCATION path literal")];
+    }
+    if (this.upperAt() === "TBLPROPERTIES") {
+      const intro = this.next();
+      if (this.kindAt() !== "lparen") abort("expected ( after TBLPROPERTIES");
+      stmt.tblProperties = [intro, ...this.takeBalancedParens()];
+    }
+    return stmt;
+  }
+
+  /** `drop table [if exists] name [purge]`. */
+  private parseDropTable(): DropTableStatement {
+    const introTokens: Token[] = [this.expectUpper("DROP"), this.expectUpper("TABLE")];
+    if (this.upperAt() === "IF" && this.upperAt(1) === "EXISTS") {
+      introTokens.push(this.next(), this.next());
+    }
+    const stmt: DropTableStatement = {
+      kind: "dropTableStatement",
+      introTokens,
+      nameTokens: this.parseObjectNameTokens(),
+    };
+    if (this.upperAt() === "PURGE") stmt.purgeToken = this.next();
+    return stmt;
+  }
+
+  /**
+   * `t`, `db.t`, or a single backticked token that already contains the dot
+   * (`` `db.t` ``, the shape `show create table` emits). Verbatim run.
+   */
+  private parseObjectNameTokens(): Token[] {
+    const head = this.peek();
+    if (head === undefined || !this.isPlainName(head)) abort("expected a table name");
+    const tokens: Token[] = [this.next()];
+    while (this.kindAt() === "dot" && this.isPlainName(this.peek(1))) {
+      tokens.push(this.next(), this.next());
+    }
+    return tokens;
+  }
+
+  private isPlainName(t: Token | undefined): boolean {
+    return t !== undefined && (t.kind === "identifier" || t.kind === "quotedIdentifier");
+  }
+
+  private parseColumnList(): ColumnList {
+    const lparen = this.expectKind("lparen", "( starting a column list");
+    const columns: ColumnDef[] = [];
+    const commas: Token[] = [];
+    for (;;) {
+      columns.push(this.parseColumnDef());
+      if (this.kindAt() === "comma") {
+        commas.push(this.next());
+        continue;
+      }
+      break;
+    }
+    const rparen = this.expectKind("rparen", ") closing a column list");
+    return { lparen, columns, commas, rparen };
+  }
+
+  private parseColumnDef(): ColumnDef {
+    const head = this.peek();
+    if (head === undefined || !this.isPlainName(head)) abort("expected a column name");
+    const nameToken = this.next();
+    const col: ColumnDef = { nameToken, typeTokens: this.takeColumnType() };
+    if (this.upperAt() === "COMMENT") col.comment = this.parseCommentClause();
+    return col;
+  }
+
+  /**
+   * Balanced token run forming a column type: `string`, `decimal ( 12 , 2 )`,
+   * `array < string >`, `map < string , int >`, `array < struct < a : int > >`.
+   * The lexer has no `>>` operator (only `>=`, `<=`, `<>`, `<=>` are
+   * multi-character), so a closing `>>` arrives as two `>` tokens and plain
+   * per-token angle counting is enough. The run ends at COMMENT, a comma, or
+   * the `)` of the column list — each only at depth zero.
+   */
+  private takeColumnType(): Token[] {
+    const start = this.pos;
+    let parens = 0;
+    let angles = 0;
+    for (;;) {
+      const t = this.peek();
+      if (t === undefined) abort("unterminated column type");
+      if (parens === 0 && angles === 0) {
+        if (t.kind === "comma" || t.kind === "rparen" || t.upper === "COMMENT") break;
+      }
+      if (t.kind === "lparen") parens++;
+      else if (t.kind === "rparen") {
+        if (parens === 0) abort("unbalanced parentheses in a column type");
+        parens--;
+      } else if (t.kind === "operator" && t.text === "<") angles++;
+      else if (t.kind === "operator" && t.text === ">") {
+        if (angles === 0) abort("unbalanced angle brackets in a column type");
+        angles--;
+      }
+      this.pos++;
+    }
+    if (this.pos === start) abort("empty column type");
+    return this.toks.slice(start, this.pos);
+  }
+
+  private parseCommentClause(): ColumnComment {
+    const commentToken = this.expectUpper("COMMENT");
+    const valueToken = this.expectKind("string", "a string literal after COMMENT");
+    return { commentToken, valueToken };
+  }
+
+  /** `row format serde '...' [with serdeproperties ( ... )]` — SERDE only. */
+  private parseRowFormat(): Token[] {
+    const tokens: Token[] = [this.expectUpper("ROW"), this.expectUpper("FORMAT")];
+    // `row format delimited fields terminated by ...` is absent from the
+    // corpus, so it degrades the whole statement instead of being modeled.
+    if (this.upperAt() !== "SERDE") abort("only ROW FORMAT SERDE is modeled");
+    tokens.push(this.next(), this.expectKind("string", "the SerDe class name"));
+    if (this.upperAt() === "WITH") {
+      tokens.push(this.next());
+      if (this.upperAt() !== "SERDEPROPERTIES") abort("expected SERDEPROPERTIES after WITH");
+      tokens.push(this.next());
+      if (this.kindAt() !== "lparen") abort("expected ( after SERDEPROPERTIES");
+      tokens.push(...this.takeBalancedParens());
+    }
+    return tokens;
+  }
+
+  /** `stored as inputformat '...' outputformat '...'` or `stored as orc`. */
+  private parseStoredAs(): Token[] {
+    const tokens: Token[] = [this.expectUpper("STORED"), this.expectUpper("AS")];
+    if (this.upperAt() === "INPUTFORMAT") {
+      tokens.push(this.next(), this.expectKind("string", "the input format class"));
+      if (this.upperAt() !== "OUTPUTFORMAT") abort("expected OUTPUTFORMAT after INPUTFORMAT");
+      tokens.push(this.next(), this.expectKind("string", "the output format class"));
+      return tokens;
+    }
+    const word = this.peek();
+    if (
+      word === undefined ||
+      (word.kind !== "identifier" && word.kind !== "keyword") ||
+      word.upper === "LOCATION" ||
+      word.upper === "TBLPROPERTIES"
+    ) {
+      abort("expected a file format name after STORED AS");
+    }
+    tokens.push(this.next());
+    return tokens;
   }
 
   // --- expressions ---------------------------------------------------------

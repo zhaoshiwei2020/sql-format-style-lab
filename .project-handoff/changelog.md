@@ -24,3 +24,11 @@
 - T-0003 dogfood 首轮：主测某 543 行真实 ETL 脚本→ 初判 UNKNOWN，暴露 `with ... insert` 缺口；修复后 VALID_SUPPORTED、门禁全过、输出与语料风格一致。
 - 全库扫描内部数仓脚本库 178 个脚本，补齐三个语法缺口（with+insert / `!` 逻辑非 / 关键字别名），覆盖率 94%→98%（175/178），余 3 个均为诚实拒绝（F-0007）。
 - 新增 golden-pending/hive/01-with-cte-insert-overwrite fixture + 3 个 parser 单测；测试 259/259，语料 43/43，pending 30/30。
+
+## 2026-08-19 17:50 CST
+
+- DDL 支持落地（三方分工：Opus parser / 主会话契约+printer / Sonnet 打包+护栏）：create table + drop table 进覆盖，fixtures/unsupported/drop-table.sql 因晋升移除。
+- Q6 拍板选 A：DDL 列缩进维持 4 空格（D-0008）。
+- VS Code 扩展打包 .vsix 并已安装（local.sql-style-calibrator），README 重写为使用文档。
+- 新增 dogfood-scan CLI 与防泄漏 pre-commit 护栏（.privacy-denylist.local gitignored）。
+- 真实覆盖：ddl 目录 180/181，脚本目录 175/178（F-0008）。测试 276/276，语料 46/46。

@@ -2,9 +2,12 @@
   "name": "sql-style-calibrator",
   "displayName": "SQL Style Calibrator",
   "description": "Deterministic, local Hive SQL formatter driven by a calibrated .sqlstyle.jsonc profile.",
-  "private": true,
   "version": "0.0.1",
   "publisher": "local",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/zhaoshiwei2020/sql-format-style-lab"
+  },
   "engines": {
     "vscode": "^1.90.0"
   },
@@ -55,6 +58,7 @@
     "prebuild": "node -e \"require('node:fs').mkdirSync('schema',{recursive:true});require('node:fs').copyFileSync('../../packages/core/schema/sqlstyle.schema.json','schema/sqlstyle.schema.json')\"",
     "build": "node esbuild.config.mjs",
     "prewatch": "npm run prebuild",
-    "watch": "node esbuild.config.mjs --watch"
+    "watch": "node esbuild.config.mjs --watch",
+    "package": "npm run build && npx --yes @vscode/vsce package --no-dependencies"
   }
 }

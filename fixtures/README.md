@@ -115,7 +115,6 @@ One `.sql` file per excluded construct, each containing one statement copied ver
 | create-table.sql | 524-547 | `create table ... (...)` |
 | create-view.sql | 565-578 | `create or replace view ...` |
 | alter-table.sql | 584-588 | `alter table ... add columns (...)` |
-| drop-table.sql | 601 | `drop table if exists ...` |
 | insert-values.sql | 609-614 | `insert into ... values (...)` |
 | merge.sql | 647-668 | `merge into ... using ... when matched ...` |
 | update.sql | 670-676 | `update ... set ... where ...` |

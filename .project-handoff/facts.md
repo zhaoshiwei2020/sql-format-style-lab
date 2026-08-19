@@ -72,3 +72,14 @@
 - As of: 2026-08-19
 - Public-use boundary: unrestricted（内部路径与表名已泛化，具体指向存本地记忆）
 - Notes: 主测文件（543 行实物签收口径 ETL）VALID_SUPPORTED、三重门禁全过；输出与校准语料风格一致（手写 2 空格/`from` 独行风格被 canonical 规范化属预期行为）
+
+### F-0008｜DDL 支持后的真实覆盖率
+
+- Status: verified
+- Statement: create table（managed 形态：列定义/comment/partitioned by/row format serde/stored as/location/tblproperties）与 drop table 已进 parser+printer 覆盖。内部数仓两目录实测：ddl 目录 180/181 VALID_SUPPORTED（余 1 个 = create table like），脚本目录 175/178（余 2 个 = create table like 与 create temporary table ... as select，1 个 = 残缺 scratch）。CTAS/like/external/clustered by 等仍按范围外诚实拒绝，是后续覆盖候选。机器导出风格 DDL 被 canonical 规范成手写风格（小写、4 空格、不做列对齐、尾子句一行一个）。
+- Sources: S-0004
+- Scope: 2026-08-19 时点；DDL 排版规则取自手写 DDL 语料 49 份多数派
+- Verified on: 2026-08-19
+- As of: 2026-08-19
+- Public-use boundary: unrestricted（内部标识已泛化）
+- Notes: Q6（DDL 缩进 4 空格）已拍板选 A（D-0008）

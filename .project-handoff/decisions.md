@@ -76,3 +76,14 @@
 - Supersedes: none
 - Superseded by: none
 - Consequences: profile.ts、两份 sqlstyle.schema.json（default 54）、docs/style-schema.md、CLAUDE.md 已同步；schema 中连带修正了遗留的 lineWidth default 100 → 78
+
+### D-0008｜第二批校准题 Q6：DDL 列缩进维持 4 空格（用户，2026-08-19）
+
+- Status: active
+- Decision: create table 列定义缩进跟随 profile 全局缩进（4 空格），不为 DDL 引入第二种缩进单位；既有手写 DDL 文件的 2 空格视为历史手癖，canonical 化时统一为 4。
+- Reason: 用户拍板选 A；保持"一个缩进单位"的可预测性。
+- Decided on: 2026-08-19
+- Evidence/inputs: docs/calibration-questions.md Q6, D-0006（同一校准流程）
+- Supersedes: none
+- Superseded by: none
+- Consequences: DDL printer 无需改动（实现本就跟随 profile）；后批 DDL 排版异议继续走校准题流程
