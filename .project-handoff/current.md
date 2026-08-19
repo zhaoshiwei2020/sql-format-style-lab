@@ -1,18 +1,19 @@
 # Current state
 
-- Last updated: 2026-08-19 17:10 CST
+- Last updated: 2026-08-19 17:40 CST
 - Active workstream: formatter 核心（单一工作流）
 - Current objective: 个人 dogfood（ARCHITECTURE Phase 3）：VS Code 实装到日常 Hive SQL 工作流，收集覆盖缺口
-- Current status: 第一批校准题 Q1~Q5 已全部拍板落地（D-0006/D-0007）。语料复现 42/42，golden 13/13，golden-pending 29/29，测试 256/256 全绿。compactMaxWidth 50→54（实证窗口 [52,56] 中点），"结构回声"规则已按 Q5 删除。
+- Current status: 校准题 Q1~Q5 已落地；dogfood CLI 首轮完成——真实库 178 脚本 175 个 VALID_SUPPORTED（F-0007），三个语法缺口已补。测试 259/259，语料 43/43，pending 30/30 全绿。
 
 ## Active tasks
 
 ### T-0003｜dogfood
-- Status: pending
-- Inputs: apps/vscode（F5 调试，formatter id `local.sql-style-calibrator`）
-- Output: 真实工作 SQL 上的 unsupported/unknown 缺口清单（fixtures/failures/）+ 新审美分歧（若有，走 A/B 校准题流程）
-- Next action: VS Code 装载插件，对真实 Hive 脚本试格式化；lineWidth 78 是否合适也在此阶段用体感验证（Q1 非终局）
-- Blocker: none（T-0001 已完成解除依赖）
+- Status: in-progress
+- Inputs: apps/vscode（F5 调试，formatter id `local.sql-style-calibrator`）；fin_wx_revenue_dw 真实脚本库
+- Output: 覆盖缺口修复 + 新审美分歧（若有，走 A/B 校准题流程）
+- Progress: CLI 首轮完成（2026-08-19，F-0007）——178 个真实脚本 175 个 VALID_SUPPORTED，三个语法缺口（with+insert / `!` 逻辑非 / 关键字别名）已修复并加测试
+- Next action: VS Code F5 装载插件在编辑器里实际用（保存即格式化体验）；lineWidth 78 是否合适用体感验证（Q1 非终局）；真实输出是否要写回工作仓库由用户决定
+- Blocker: none
 
 ## Completed recently
 

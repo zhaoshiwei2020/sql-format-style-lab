@@ -259,7 +259,9 @@ export function makeStmtPrinter(): StmtPrinter {
   }
 
   function insertDoc(s: InsertStatement, ctx: Ctx): Doc {
-    const parts: Doc[] = [kwRun(s.introTokens, ctx), text(" "), tableRefDoc(s.table, ctx)];
+    const parts: Doc[] = [];
+    if (s.with) parts.push(withClauseDoc(s.with, ctx), hardline());
+    parts.push(kwRun(s.introTokens, ctx), text(" "), tableRefDoc(s.table, ctx));
     if (s.partition) parts.push(hardline(), partitionDoc(s.partition, ctx));
     if (s.ifNotExists && s.ifNotExists.length > 0) parts.push(text(" "), kwRun(s.ifNotExists, ctx));
     parts.push(hardline(), selectStatementDoc(s.source, ctx));

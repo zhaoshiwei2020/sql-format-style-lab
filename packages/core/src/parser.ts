@@ -355,8 +355,10 @@ class StatementParser {
         node = this.parseGeneric();
         break;
       case "SELECT":
-      case "WITH":
         node = this.parseSelectStatement();
+        break;
+      case "WITH":
+        node = this.parseWithStatement();
         break;
       case "INSERT":
         node = this.parseInsert();
@@ -431,6 +433,18 @@ class StatementParser {
     return withClause === undefined
       ? { kind: "selectStatement", body }
       : { kind: "selectStatement", with: withClause, body };
+  }
+
+  /** `with ...` opener: the CTE list may prefix either a query or an INSERT. */
+  private parseWithStatement(): SelectStatement | InsertStatement {
+    const withClause = this.parseWith();
+    if (this.upperAt() === "INSERT") {
+      const stmt = this.parseInsert();
+      stmt.with = withClause;
+      return stmt;
+    }
+    const body = this.parseQueryExpr();
+    return { kind: "selectStatement", with: withClause, body };
   }
 
   private parseWith(): WithClause {
@@ -607,9 +621,14 @@ class StatementParser {
     if (t?.upper === "AS") {
       item.asToken = this.next();
       const alias = this.peek();
+      // After an explicit AS, Hive accepts non-reserved keywords as aliases
+      // (`as comment`, `as type`, ...). Structural stop keywords still abort,
+      // so a truly missing alias (`select a as from t`) stays UNKNOWN.
       if (
         alias === undefined ||
-        (alias.kind !== "identifier" && alias.kind !== "quotedIdentifier")
+        (alias.kind !== "identifier" &&
+          alias.kind !== "quotedIdentifier" &&
+          !(alias.kind === "keyword" && !EXPR_STOP_KEYWORDS.has(alias.upper)))
       ) {
         abort("expected select alias after AS");
       }
@@ -1062,6 +1081,12 @@ class StatementParser {
         const notToken = this.next();
         return this.parseExists(notToken);
       }
+      const notToken = this.next();
+      return { kind: "not", notToken, operand: this.parseNot() };
+    }
+    // Hive's `!` logical negation, e.g. `and ! (a = 0 and b = 0)`.
+    const t = this.peek();
+    if (t !== undefined && t.kind === "operator" && t.text === "!") {
       const notToken = this.next();
       return { kind: "not", notToken, operand: this.parseNot() };
     }

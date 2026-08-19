@@ -353,6 +353,18 @@ describe("fixtures/unsupported", () => {
 // ---------------------------------------------------------------------------
 
 describe("boolean chains", () => {
+  it("parses Hive's `!` logical negation like NOT", () => {
+    const sql = "select 1 from t where a = 1 and ! (b = 0 and c = 0);";
+    const spec = querySpecOf(parseOne(sql));
+    const cond = spec.where?.condition as BooleanChain;
+    expect(cond.kind).toBe("booleanChain");
+    const neg = cond.operands[1] as Extract<Expr, { kind: "not" }>;
+    expect(neg.kind).toBe("not");
+    expect(neg.notToken.text).toBe("!");
+    expect(neg.operand.kind).toBe("paren");
+    expectLossless(sql);
+  });
+
   it("flattens `a and b and c` into a single 3-operand chain", () => {
     const spec = querySpecOf(parseOne("select 1 from t where a = 1 and b = 2 and c = 3;"));
     const cond = spec.where?.condition as BooleanChain;
@@ -516,6 +528,19 @@ describe("INSERT and multi-insert", () => {
     expect(stmt.partition?.entries[1]?.map((t) => t.text)).toEqual(["region"]);
   });
 
+  it("attaches a leading CTE list to the insert (with ... insert overwrite)", () => {
+    const sql =
+      "with u as (select order_id from s group by order_id) " +
+      "insert overwrite table db.t partition (dt = '${hiveconf:month}') select order_id from u;";
+    const stmt = parseOne(sql) as InsertStatement;
+    expect(stmt.kind).toBe("insertStatement");
+    expect(stmt.with?.ctes.length).toBe(1);
+    expect(stmt.with?.ctes[0]?.name.text).toBe("u");
+    expect(stmt.introTokens.map((t) => t.upper)).toEqual(["INSERT", "OVERWRITE", "TABLE"]);
+    expect(stmt.source.kind).toBe("selectStatement");
+    expectLossless(sql);
+  });
+
   it("models the Hive multi-insert shape", () => {
     const sql = readFileSync(join(SPARK_FIXTURES, "13-2-multi-insert-from/expected.sql"), "utf8");
     const stmt = parseOne(sql) as MultiInsertStatement;
@@ -604,6 +629,17 @@ describe("misc expression shapes", () => {
     expect(spec.items[0]?.alias?.text).toBe("x");
     expect(spec.items[1]?.asToken?.upper).toBe("AS");
     expect(spec.items[1]?.alias?.text).toBe("y");
+  });
+
+  it("accepts non-reserved keywords as explicit AS aliases, rejects structural ones", () => {
+    const sql = "select a as comment, b as type from t;";
+    const spec = querySpecOf(parseOne(sql));
+    expect(spec.items[0]?.alias?.text).toBe("comment");
+    expect(spec.items[1]?.alias?.text).toBe("type");
+    expectLossless(sql);
+    // A structural stop keyword after AS is still a missing alias → UNKNOWN.
+    const bad = parse(lex("select a as from t;", HIVE_110).tokens, HIVE_110);
+    expect(bad.file.statements[0]?.kind).toBe("unknownStatement");
   });
 
   it("flattens set operations left-assoc into first + rest", () => {

@@ -254,6 +254,8 @@ export interface LimitClause {
 
 export interface InsertStatement extends StatementBase {
   kind: "insertStatement";
+  /** Hive allows a CTE list before the insert: `with u as (...) insert ...` */
+  with?: WithClause;
   /** [insert, overwrite, table] or [insert, into] or [insert, into, table] */
   introTokens: Token[];
   table: TableRef;
