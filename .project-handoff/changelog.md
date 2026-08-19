@@ -21,6 +21,6 @@
 
 ## 2026-08-19 17:40 CST
 
-- T-0003 dogfood 首轮：主测 dwd_fin_wx_goods_delivery_sign_fm.sql（543 行真实 ETL）→ 初判 UNKNOWN，暴露 `with ... insert` 缺口；修复后 VALID_SUPPORTED、门禁全过、输出与语料风格一致。
-- 全库扫描 fin_wx_revenue_dw/scripts 178 个脚本，补齐三个语法缺口（with+insert / `!` 逻辑非 / 关键字别名），覆盖率 94%→98%（175/178），余 3 个均为诚实拒绝（F-0007）。
+- T-0003 dogfood 首轮：主测某 543 行真实 ETL 脚本→ 初判 UNKNOWN，暴露 `with ... insert` 缺口；修复后 VALID_SUPPORTED、门禁全过、输出与语料风格一致。
+- 全库扫描内部数仓脚本库 178 个脚本，补齐三个语法缺口（with+insert / `!` 逻辑非 / 关键字别名），覆盖率 94%→98%（175/178），余 3 个均为诚实拒绝（F-0007）。
 - 新增 golden-pending/hive/01-with-cte-insert-overwrite fixture + 3 个 parser 单测；测试 259/259，语料 43/43，pending 30/30。

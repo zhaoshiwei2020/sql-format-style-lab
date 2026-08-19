@@ -9,7 +9,7 @@
 
 ### T-0003｜dogfood
 - Status: in-progress
-- Inputs: apps/vscode（F5 调试，formatter id `local.sql-style-calibrator`）；fin_wx_revenue_dw 真实脚本库
+- Inputs: apps/vscode（F5 调试，formatter id `local.sql-style-calibrator`）；内部数仓真实脚本库（路径见本地会话记忆）
 - Output: 覆盖缺口修复 + 新审美分歧（若有，走 A/B 校准题流程）
 - Progress: CLI 首轮完成（2026-08-19，F-0007）——178 个真实脚本 175 个 VALID_SUPPORTED，三个语法缺口（with+insert / `!` 逻辑非 / 关键字别名）已修复并加测试
 - Next action: VS Code F5 装载插件在编辑器里实际用（保存即格式化体验）；lineWidth 78 是否合适用体感验证（Q1 非终局）；真实输出是否要写回工作仓库由用户决定

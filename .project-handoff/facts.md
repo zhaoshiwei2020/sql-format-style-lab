@@ -62,13 +62,13 @@
 - Verified on: 2026-08-19
 - Public-use boundary: unrestricted
 
-### F-0007｜dogfood 首轮：fin_wx_revenue_dw 全库 178 个脚本的四态分布
+### F-0007｜dogfood 首轮：内部数仓全库 178 个脚本的四态分布
 
 - Status: verified
-- Statement: 对 /Users/tal/Code/fin_wx_revenue_dw/scripts 下全部 178 个 .sql 跑 formatSql：补齐三个语法缺口后 175 个 VALID_SUPPORTED；2 个 VALID_UNSUPPORTED（drop-table/create-table，DDL 打印按 ARCHITECTURE S1 范围内属正确拒绝）；1 个 UNKNOWN（tmp/_verify_sign_pipeline_base.sql 文件本身残缺——CTE 列表后无最终 select，判 UNKNOWN 是正确行为）。三个补齐的缺口：`with ... insert overwrite`（CTE 前置 insert，bpit_fin 标准写法）、`!` 逻辑非（`and ! (...)`）、非保留关键字作显式 AS 别名（`as comment`）。
+- Statement: 对本机内部数仓脚本库（路径见本地会话记忆）全部 178 个 .sql 跑 formatSql：补齐三个语法缺口后 175 个 VALID_SUPPORTED；2 个 VALID_UNSUPPORTED（drop-table/create-table，DDL 打印按 ARCHITECTURE S1 范围内属正确拒绝）；1 个 UNKNOWN（tmp/_verify_sign_pipeline_base.sql 文件本身残缺——CTE 列表后无最终 select，判 UNKNOWN 是正确行为）。三个补齐的缺口：`with ... insert overwrite`（CTE 前置 insert，内部脚本标准写法）、`!` 逻辑非（`and ! (...)`）、非保留关键字作显式 AS 别名（`as comment`）。
 - Sources: S-0004（dogfood 属 T-0003）
-- Scope: 2026-08-19 时点的 fin_wx_revenue_dw 仓库内容
+- Scope: 2026-08-19 时点的内部数仓仓库内容
 - Verified on: 2026-08-19
 - As of: 2026-08-19
-- Public-use boundary: internal（涉及公司仓库路径与表名）
-- Notes: 主测文件 dwd_fin_wx_goods_delivery_sign_fm.sql（543 行）VALID_SUPPORTED、三重门禁全过；输出与校准语料风格一致（手写 2 空格/`from` 独行风格被 canonical 规范化属预期行为）
+- Public-use boundary: unrestricted（内部路径与表名已泛化，具体指向存本地记忆）
+- Notes: 主测文件（543 行实物签收口径 ETL）VALID_SUPPORTED、三重门禁全过；输出与校准语料风格一致（手写 2 空格/`from` 独行风格被 canonical 规范化属预期行为）
