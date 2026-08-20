@@ -24,11 +24,12 @@ node --experimental-strip-types packages/core/scripts/coverage-report.ts    # go
 
 ## 模块归属
 
-- printer/（Doc IR + solver + 排版规则）：核心审美逻辑，改动需跑 divergence-report 对比前后。
-- lexer.ts / dialects/：lossless 词法，70+ 单测。
-- parser.ts：tolerant CST，token 完整性有专项测试（树上 token 与词法流一一对应）。
-- safety.ts / coverage.ts：门禁与四态分类。
-- apps/vscode：插件壳，formatter id `local.sql-style-calibrator`。
+- **apps/vscode：日常在用的插件（2026-08-20 起）**。引擎 = sql-formatter 二开（`src/hiveFormat.ts`：set 等会话语句逐字节透传 + 旧 disable 标记摘除 + `!`→`not` + 单语句失败兜底）。配置沿用 `SQL-Formatter-VSCode.*` 键。改这里不用跑 packages/core 测试，用真实脚本目录验证幂等（359 文件全稳定为基线）。
+- printer/（Doc IR + solver + 排版规则）：自研引擎核心审美逻辑（**已冻结**，见下）。
+- lexer.ts / dialects/：lossless 词法，70+ 单测（已冻结）。
+- parser.ts：tolerant CST，token 完整性有专项测试（已冻结）。
+- safety.ts / coverage.ts：门禁与四态分类（已冻结）。
+- packages/core 整体：第一阶段自研确定性 formatter，2026-08-20 起冻结为研究成果（测试 282/282 保持绿即可），不再加语法/改排版。其审美结论（lineWidth 88 等）已迁入 apps/vscode 默认值。
 
 ## 语料反推出的关键排版规则（printer/expr.ts 头注释有全表）
 

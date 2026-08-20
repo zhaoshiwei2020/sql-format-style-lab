@@ -1,8 +1,8 @@
 {
   "name": "sql-style-calibrator",
-  "displayName": "SQL Style Calibrator",
-  "description": "Deterministic, local Hive SQL formatter driven by a calibrated .sqlstyle.jsonc profile.",
-  "version": "0.0.1",
+  "displayName": "SQL Formatter (Hive, set-passthrough)",
+  "description": "sql-formatter with Hive session statements (set/use/add jar) passed through verbatim; reads SQL-Formatter-VSCode.* settings.",
+  "version": "0.2.0",
   "publisher": "local",
   "repository": {
     "type": "git",
@@ -21,33 +21,72 @@
         "extensions": [".hql"]
       }
     ],
-    "commands": [
-      {
-        "command": "sqlstyle.previewFormatting",
-        "title": "SQL Style: Preview Formatting"
-      },
-      {
-        "command": "sqlstyle.showUnsupported",
-        "title": "SQL Style: Show Unsupported Syntax"
-      },
-      {
-        "command": "sqlstyle.debugParse",
-        "title": "SQL Style: Debug Parse"
-      },
-      {
-        "command": "sqlstyle.openProfile",
-        "title": "SQL Style: Open Style Profile"
+    "configuration": {
+      "title": "SQL Formatter (SQL-Formatter-VSCode compatible)",
+      "properties": {
+        "SQL-Formatter-VSCode.dialect": {
+          "type": "string",
+          "default": "spark",
+          "description": "sql-formatter dialect."
+        },
+        "SQL-Formatter-VSCode.expressionWidth": {
+          "type": "number",
+          "default": 88,
+          "description": "Maximum width of expressions kept on one line. 88 fits the cast(sum(x) / 100 as decimal(16, 2)) idiom."
+        },
+        "SQL-Formatter-VSCode.tabSizeOverride": {
+          "type": "number",
+          "default": 2,
+          "description": "Indent width (sql-formatter tabWidth)."
+        },
+        "SQL-Formatter-VSCode.insertSpacesOverride": {
+          "type": "boolean",
+          "default": true,
+          "description": "Use spaces for indentation."
+        },
+        "SQL-Formatter-VSCode.keywordCase": {
+          "type": "string",
+          "enum": ["lower", "upper", "preserve"],
+          "default": "lower"
+        },
+        "SQL-Formatter-VSCode.dataTypeCase": {
+          "type": "string",
+          "enum": ["lower", "upper", "preserve"],
+          "default": "lower"
+        },
+        "SQL-Formatter-VSCode.functionCase": {
+          "type": "string",
+          "enum": ["lower", "upper", "preserve"],
+          "default": "lower"
+        },
+        "SQL-Formatter-VSCode.identifierCase": {
+          "type": "string",
+          "enum": ["lower", "upper", "preserve"],
+          "default": "lower"
+        },
+        "SQL-Formatter-VSCode.denseOperators": {
+          "type": "boolean",
+          "default": false
+        },
+        "SQL-Formatter-VSCode.newlineBeforeSemicolon": {
+          "type": "boolean",
+          "default": true
+        },
+        "SQL-Formatter-VSCode.linesBetweenQueries": {
+          "type": "number",
+          "default": 2,
+          "description": "Blank lines between statements."
+        },
+        "SQL-Formatter-VSCode.paramTypes": {
+          "type": "object",
+          "default": {},
+          "description": "sql-formatter paramTypes. ${hiveconf:...} templates are always recognized in addition."
+        }
       }
-    ],
-    "jsonValidation": [
-      {
-        "fileMatch": ["**/.sqlstyle.jsonc"],
-        "url": "./schema/sqlstyle.schema.json"
-      }
-    ]
+    }
   },
   "dependencies": {
-    "@sqlstyle/core": "*"
+    "sql-formatter": "^15.8.2"
   },
   "devDependencies": {
     "@types/vscode": "^1.90.0",
@@ -55,9 +94,7 @@
     "esbuild": "latest"
   },
   "scripts": {
-    "prebuild": "node -e \"require('node:fs').mkdirSync('schema',{recursive:true});require('node:fs').copyFileSync('../../packages/core/schema/sqlstyle.schema.json','schema/sqlstyle.schema.json')\"",
     "build": "node esbuild.config.mjs",
-    "prewatch": "npm run prebuild",
     "watch": "node esbuild.config.mjs --watch",
     "package": "npm run build && npx --yes @vscode/vsce package --no-dependencies"
   }
