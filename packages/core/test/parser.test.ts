@@ -711,7 +711,18 @@ function uppersOf(tokens: readonly Token[] | undefined): string[] {
   return (tokens ?? []).map((t) => t.upper);
 }
 
-function createTableOf(sql: string): CreateTableStatement {
+function createTableOf(
+  sql: string,
+): CreateTableStatement & { columnList: NonNullable<CreateTableStatement["columnList"]> } {
+  const stmt = parseOne(sql);
+  expect(stmt.kind).toBe("createTableStatement");
+  expect((stmt as CreateTableStatement).columnList).toBeDefined();
+  return stmt as CreateTableStatement & {
+    columnList: NonNullable<CreateTableStatement["columnList"]>;
+  };
+}
+
+function createTableShapeOf(sql: string): CreateTableStatement {
   const stmt = parseOne(sql);
   expect(stmt.kind).toBe("createTableStatement");
   return stmt as CreateTableStatement;
@@ -861,6 +872,42 @@ describe("CREATE TABLE", () => {
     expectLossless(sql);
   });
 
+  it("accepts TEMPORARY with the existing column-list shape", () => {
+    const sql = "create temporary table style_lab.mini_tmp (`a` string);";
+    const stmt = createTableOf(sql);
+    expect(uppersOf(stmt.introTokens)).toEqual(["CREATE", "TEMPORARY", "TABLE"]);
+    expect(stmt.columnList.columns[0]?.nameToken.text).toBe("`a`");
+    expect(stateOf(sql)).toBe("VALID_SUPPORTED");
+    expectLossless(sql);
+  });
+
+  it("models CREATE TABLE LIKE as a typed, lossless shape", () => {
+    const sql = "create table if not exists style_lab.result_fd like style_lab.source_fd;";
+    const stmt = createTableShapeOf(sql);
+    expect(uppersOf(stmt.introTokens)).toEqual(["CREATE", "TABLE", "IF", "NOT", "EXISTS"]);
+    expect(stmt.columnList).toBeUndefined();
+    expect(stmt.asQuery).toBeUndefined();
+    expect(stmt.like?.likeToken.upper).toBe("LIKE");
+    expect(textsOf(stmt.like?.sourceNameTokens)).toEqual(["style_lab", ".", "source_fd"]);
+    expect(stateOf(sql)).toBe("VALID_SUPPORTED");
+    expectLossless(sql);
+  });
+
+  it("models CREATE TEMPORARY TABLE AS query with the existing SELECT CST", () => {
+    const sql =
+      "create temporary table style_lab.result_tmp as " +
+      "select a, b from style_lab.source_fm where dt = '2026-08-19';";
+    const stmt = createTableShapeOf(sql);
+    expect(uppersOf(stmt.introTokens)).toEqual(["CREATE", "TEMPORARY", "TABLE"]);
+    expect(stmt.columnList).toBeUndefined();
+    expect(stmt.like).toBeUndefined();
+    expect(stmt.asQuery?.asToken.upper).toBe("AS");
+    expect(stmt.asQuery?.source.kind).toBe("selectStatement");
+    expect(stmt.asQuery?.source.body.kind).toBe("querySpec");
+    expect(stateOf(sql)).toBe("VALID_SUPPORTED");
+    expectLossless(sql);
+  });
+
   it("accepts columns without a COMMENT and a bare identifier column name", () => {
     const sql = "create table style_lab.mini_fd (`a` string, b bigint comment 'b', c int);";
     const stmt = createTableOf(sql);
@@ -978,9 +1025,14 @@ describe("CREATE TABLE", () => {
       "create external table style_lab.t (`a` string) stored as orc;",
       "create-table",
     );
-    expectUnsupported("create temporary table style_lab.t (`a` string);", "create-table");
-    expectUnsupported("create table style_lab.t like style_lab.u;", "create-table");
-    expectUnsupported("create table style_lab.t as select 1 from style_lab.u;", "create-table");
+    expectUnsupported(
+      "create table style_lab.t (`a` string) as select 1 from style_lab.u;",
+      "create-table",
+    );
+    expectUnsupported(
+      "create table style_lab.t like style_lab.u location 'hdfs://example/x';",
+      "create-table",
+    );
     expectUnsupported(
       "create table style_lab.t (`a` string) clustered by (`a`) into 8 buckets;",
       "create-table",
