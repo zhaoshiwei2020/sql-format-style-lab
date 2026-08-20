@@ -4,7 +4,7 @@
 
 import type { Token, Comment } from "../tokens.js";
 import type { StyleProfile } from "../profile.js";
-import { concat, hardline, text, type Doc } from "./doc.js";
+import { breakParent, concat, freshline, hardline, lineSuffix, text, type Doc } from "./doc.js";
 
 export interface Ctx {
   p: StyleProfile;
@@ -34,14 +34,24 @@ function commentDoc(c: Comment): Doc {
 function emit(t: Token, body: string): Doc {
   const parts: Doc[] = [];
   for (const c of t.leadingComments) {
+    // A comment that had its own line in the source keeps its own line: if
+    // the emitter is mid-line (e.g. after `with ` / `where `), freshline
+    // moves to a new one first; at a line start it is a no-op.
+    if (c.ownLine) parts.push(freshline());
     if (c.blankLineBefore) parts.push(hardline());
     parts.push(commentDoc(c), hardline());
   }
   parts.push(text(body));
   const tc = t.trailingComment;
   if (tc) {
-    parts.push(text(" "), commentDoc(tc));
-    if (tc.kind === "line") parts.push(hardline());
+    if (tc.kind === "line") {
+      // Trailing `--` comments are deferred to the end of the output line
+      // (synthesized separators land before them) and are width-exempt; the
+      // breakParent keeps following code from sharing the commented line.
+      parts.push(lineSuffix(" " + tc.text), breakParent());
+    } else {
+      parts.push(text(" "), commentDoc(tc));
+    }
   }
   return parts.length === 1 ? parts[0]! : concat(...parts);
 }

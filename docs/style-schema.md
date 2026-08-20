@@ -23,7 +23,7 @@ JSON Schema 见 `packages/core/schema/sqlstyle.schema.json`。字段含义与 v1
 | `dialectVersion` | string | `"1.1"` | 自由字符串 | 方言的具体版本号，避免把仅存在于新版本的关键字误判为旧版本语法。 |
 | `mode` | string | `"canonical"` | `"canonical"`（固定值） | 格式化模式。S1 只提供规范化模式：相同 token/方言版本/profile 恒定收敛到同一输出，不提供"尽量保留原布局"模式。 |
 | `unsupportedBehavior` | string | `"leave-document-unchanged"` | `"leave-document-unchanged"`（固定值） | 遇到 `VALID_UNSUPPORTED`/`INVALID`/`UNKNOWN` 时的行为：整篇文档原子性，不改动源文件，只给出诊断。 |
-| `lineWidth` | integer | `78` | 任意正整数 | 期望的最大行宽（字符数），驱动 layout solver 的换行决策。78 为语料宽度扫描的实证最优（校准题 Q1，暂定，dogfood 后可再调）。 |
+| `lineWidth` | integer | `88` | 任意正整数 | 期望的最大行宽（字符数），驱动 layout solver 的换行决策。88 为 Q1 终局拍板（2026-08-20）：语料实证最优是 78，但 dogfood 显示真实脚本的高频句式（`cast(sum(x) / 100 as decimal(16, 2)) as xxx`）落在 79~84 列，78 会把整族炸成 3 行；88 让其保持单行。行尾 `--` 注释豁免行宽，不参与断行决策。 |
 | `keywordCase` | string | `"lower"` | `"lower"` \| `"upper"` \| `"preserve"` | 关键字（`select`/`from`/`where` 等）大小写策略。 |
 | `functionCase` | string | `"lower"` | `"lower"` \| `"upper"` \| `"preserve"` | 函数名大小写策略。 |
 | `dataTypeCase` | string | `"lower"` | `"lower"` \| `"upper"` \| `"preserve"` | 数据类型名（`string`/`bigint` 等）大小写策略。 |

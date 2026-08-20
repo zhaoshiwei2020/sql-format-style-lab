@@ -7,8 +7,7 @@ select
                 when refund_time is not null then
                     case
                         when signed_quantity = 0 then 0
-                        when signed_quantity < total_quantity
-                        then partial_revenue
+                        when signed_quantity < total_quantity then partial_revenue
                         else full_revenue
                     end
                 when sign_time is not null then full_revenue

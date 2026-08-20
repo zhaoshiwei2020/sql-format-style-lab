@@ -123,10 +123,37 @@ export function makeStmtPrinter(): StmtPrinter {
     return flatOnly(concat(...parts));
   }
 
+  /** Earliest token under a CST node (stream order). */
+  function earliestToken(s: unknown): Token | undefined {
+    let best: Token | undefined;
+    const visit = (node: unknown): void => {
+      if (node === null || typeof node !== "object") return;
+      if (Array.isArray(node)) {
+        for (const x of node) visit(x);
+        return;
+      }
+      const rec = node as Record<string, unknown>;
+      if (typeof rec["text"] === "string" && typeof rec["upper"] === "string" && typeof rec["start"] === "number") {
+        const t = node as Token;
+        if (!best || t.start < best.start) best = t;
+        return;
+      }
+      for (const k of Object.keys(rec)) visit(rec[k]);
+    };
+    visit(s);
+    return best;
+  }
+
   /** where/having/qualify: chains always expand under a lone keyword. */
   function conditionClauseDoc(kw: Doc, cond: Expr, ctx: Ctx): Doc {
     if (cond.kind === "booleanChain") {
       return concat(kw, indent(concat(hardline(), ep.booleanChainBroken(cond, ctx, {}))));
+    }
+    // Own-line comments ahead of the condition can't share the keyword line;
+    // the indented broken form keeps comment and condition under the keyword.
+    const first = earliestToken(cond);
+    if (first && first.leadingComments.some((c) => c.ownLine)) {
+      return concat(kw, indent(concat(hardline(), group(ep.printExpr(cond, ctx)))));
     }
     return concat(kw, text(" "), group(ep.printExpr(cond, ctx)));
   }
@@ -344,9 +371,33 @@ export function makeStmtPrinter(): StmtPrinter {
   }
 
   function createTableDoc(s: CreateTableStatement, ctx: Ctx): Doc {
-    const parts: Doc[] = [kwRun(s.introTokens, ctx), text(" "), ep.nameDoc(s.nameTokens, ctx), text(" (")];
-    const cols = s.columnList.columns.map((c, i) =>
-      i < s.columnList.columns.length - 1 ? concat(columnDefDoc(c, ctx), text(",")) : columnDefDoc(c, ctx),
+    const parts: Doc[] = [kwRun(s.introTokens, ctx), text(" "), ep.nameDoc(s.nameTokens, ctx)];
+
+    if (s.like) {
+      parts.push(
+        text(" "),
+        ctx.kw(s.like.likeToken),
+        text(" "),
+        ep.nameDoc(s.like.sourceNameTokens, ctx),
+      );
+      return concat(...parts);
+    }
+
+    if (s.asQuery) {
+      parts.push(
+        text(" "),
+        ctx.kw(s.asQuery.asToken),
+        hardline(),
+        selectStatementDoc(s.asQuery.source, ctx),
+      );
+      return concat(...parts);
+    }
+
+    if (!s.columnList) throw new Error("CREATE TABLE has no modeled definition");
+    const columnList = s.columnList;
+    parts.push(text(" ("));
+    const cols = columnList.columns.map((c, i) =>
+      i < columnList.columns.length - 1 ? concat(columnDefDoc(c, ctx), text(",")) : columnDefDoc(c, ctx),
     );
     parts.push(indent(concat(hardline(), join(hardline(), cols))), hardline(), text(")"));
     if (s.tableComment) {
@@ -412,22 +463,7 @@ export function makeStmtPrinter(): StmtPrinter {
 
   /** Earliest token of a statement, for blank-line preservation. */
   function firstThingBlankLine(s: unknown): boolean {
-    let best: Token | undefined;
-    const visit = (node: unknown): void => {
-      if (node === null || typeof node !== "object") return;
-      if (Array.isArray(node)) {
-        for (const x of node) visit(x);
-        return;
-      }
-      const rec = node as Record<string, unknown>;
-      if (typeof rec["text"] === "string" && typeof rec["upper"] === "string" && typeof rec["start"] === "number") {
-        const t = node as Token;
-        if (!best || t.start < best.start) best = t;
-        return;
-      }
-      for (const k of Object.keys(rec)) visit(rec[k]);
-    };
-    visit(s);
+    const best = earliestToken(s);
     if (!best) return false;
     // When leading comments exist, the token emitter already renders their
     // blankLineBefore; adding another here would double the blank line.

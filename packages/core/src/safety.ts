@@ -38,9 +38,14 @@ interface OrderedComment {
 /** Ordered comment stream: walk tokens (including eof) collecting leading + trailing comments. */
 function collectComments(tokens: Token[]): OrderedComment[] {
   const out: OrderedComment[] = [];
+  // Trailing whitespace inside a line comment is not semantic and the
+  // renderer's end-of-line trim removes it; compare line comments rstripped
+  // so a source `-- note\t` still counts as preserved.
+  const norm = (c: { kind: string; text: string }): OrderedComment =>
+    c.kind === "line" ? { kind: c.kind, text: c.text.replace(/[ \t]+$/, "") } : { kind: c.kind, text: c.text };
   for (const t of tokens) {
-    for (const c of t.leadingComments) out.push({ kind: c.kind, text: c.text });
-    if (t.trailingComment) out.push({ kind: t.trailingComment.kind, text: t.trailingComment.text });
+    for (const c of t.leadingComments) out.push(norm(c));
+    if (t.trailingComment) out.push(norm(t.trailingComment));
   }
   return out;
 }

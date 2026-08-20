@@ -6,11 +6,7 @@ select
             and planned_lesson_count = completed_lesson_count
         then round(
             apportioned_payment
-            - if(
-                history_revenue is null,
-                0,
-                cast(history_revenue as decimal(18, 2))
-            ),
+            - if(history_revenue is null, 0, cast(history_revenue as decimal(18, 2))),
             2
         )
         when return_time is null

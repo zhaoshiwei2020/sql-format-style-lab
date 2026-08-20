@@ -63,7 +63,7 @@
     "lineWidth": {
       "type": "integer",
       "minimum": 1,
-      "default": 78,
+      "default": 88,
       "description": "期望的最大行宽（字符数）。用于 layout solver 判断是否需要换行展开语法结构。"
     },
     "case": {

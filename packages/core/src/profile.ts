@@ -81,11 +81,12 @@ export const DEFAULT_PROFILE: StyleProfile = {
   mode: "canonical",
   unsupportedBehavior: "leave-document-unchanged",
   indent: { style: "space", size: 4 },
-  // Empirical argmax over the calibration corpus (width-scan 75..80: 78 →
-  // 36/42 byte-identical, the best fit; 80 → 35, 100 → far worse). The corpus
-  // was clearly hand-formatted near 78-80 with some noise. CALIBRATION
-  // QUESTION for the user: settle on 78, 80, or 100 + soft tolerance.
-  lineWidth: 78,
+  // Q1 settled at 88 (user decision, 2026-08-20, dogfood-driven): the
+  // original corpus argmax was 78 (width-scan 75..80: 78 → 36/42
+  // byte-identical), but real-world dogfooding showed the dominant idiom
+  // `cast(sum(x) / 100 as decimal(16, 2)) as xxx` lands at ~79-84 cols and
+  // exploded to 3 lines under 78. 88 keeps that whole family single-line.
+  lineWidth: 88,
   case: {
     shortWhen: "single-line",
     wrappedWhen: {

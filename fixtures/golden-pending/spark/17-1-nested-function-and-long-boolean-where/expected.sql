@@ -24,13 +24,7 @@ select
     ).sku_id as first_sku_id
 from style_lab.order_event
 where
-    dt in (
-        '2026-08-15',
-        '2026-08-16',
-        '2026-08-17',
-        '2026-08-18',
-        '2026-08-19'
-    )
+    dt in ('2026-08-15', '2026-08-16', '2026-08-17', '2026-08-18', '2026-08-19')
     and (
         (order_status = 'completed' and amount >= 1000)
         or (order_status = 'refunded' and refund_amount >= 500)

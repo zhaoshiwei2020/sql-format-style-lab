@@ -310,14 +310,24 @@ export interface ColumnList {
 
 export interface CreateTableStatement extends StatementBase {
   kind: "createTableStatement";
-  /** [create, table] plus optional [if, not, exists]; `external` is NOT
-   *  in scope (absent from the corpus) — reject to unsupported instead. */
+  /** [create, (temporary), table] plus optional [if, not, exists]; `external`
+   *  is NOT in scope — reject to unsupported instead. */
   introTokens: Token[];
   /** table name: identifier/quotedIdentifier tokens with dots, verbatim. */
   nameTokens: Token[];
-  columnList: ColumnList;
+  /** Exactly one definition shape is present: columns, LIKE, or AS query. */
+  columnList?: ColumnList;
+  like?: {
+    likeToken: Token;
+    sourceNameTokens: Token[];
+  };
+  asQuery?: {
+    asToken: Token;
+    source: SelectStatement;
+  };
   /** trailing clauses; all optional, source order is fixed by the grammar.
-   *  Raw token runs (printer re-glues; splits storedAs before OUTPUTFORMAT). */
+   *  Only the column-list shape currently accepts them. Raw token runs
+   *  (printer re-glues; splits storedAs before OUTPUTFORMAT). */
   tableComment?: ColumnComment;
   partitionedBy?: { introTokens: Token[]; columnList: ColumnList };
   /** `row format serde '...'` (+ optional `with serdeproperties (...)`) */

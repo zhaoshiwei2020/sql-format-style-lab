@@ -393,7 +393,7 @@ class StatementParser {
     return node;
   }
 
-  /** `create table ...` → "create-table"; falls back to the bare opener. */
+  /** `create [temporary] table ...` → "create-table"; else bare opener. */
   private refineDdlConstruct(base: string): string {
     if (base !== "create" && base !== "drop" && base !== "alter") return base;
     const limit = Math.min(this.toks.length, 6);
@@ -1085,25 +1085,48 @@ class StatementParser {
   }
 
   /**
-   * `create table [if not exists] name ( cols )` plus the fixed-order tail:
-   * comment → partitioned by → row format → stored as → location →
-   * tblproperties. `external` / `temporary` / `like` / `as select` /
-   * `clustered by` / `skewed by` / `row format delimited` are all outside the
-   * corpus and land in the guard above.
+   * Three deliberately narrow shapes:
+   * - `create [temporary] table [if not exists] name ( cols )` plus the
+   *   fixed-order tail: comment → partitioned by → row format →
+   *   stored as → location → tblproperties;
+   * - `create [temporary] table [if not exists] name like source`;
+   * - `create [temporary] table [if not exists] name as <query>`.
+   *
+   * `external`, column-list CTAS, LIKE/CTAS tail clauses, `clustered by`,
+   * `skewed by`, and `row format delimited` remain outside the modeled subset
+   * and land in the whole-statement guard above.
    */
   private parseCreateTable(): CreateTableStatement {
-    const introTokens: Token[] = [this.expectUpper("CREATE"), this.expectUpper("TABLE")];
+    const introTokens: Token[] = [this.expectUpper("CREATE")];
+    if (this.upperAt() === "TEMPORARY") introTokens.push(this.next());
+    introTokens.push(this.expectUpper("TABLE"));
     if (this.upperAt() === "IF" && this.upperAt(1) === "NOT" && this.upperAt(2) === "EXISTS") {
       introTokens.push(this.next(), this.next(), this.next());
     }
     const nameTokens = this.parseObjectNameTokens();
-    const columnList = this.parseColumnList();
     const stmt: CreateTableStatement = {
       kind: "createTableStatement",
       introTokens,
       nameTokens,
-      columnList,
     };
+
+    if (this.upperAt() === "LIKE") {
+      stmt.like = {
+        likeToken: this.next(),
+        sourceNameTokens: this.parseObjectNameTokens(),
+      };
+      return stmt;
+    }
+
+    if (this.upperAt() === "AS") {
+      stmt.asQuery = {
+        asToken: this.next(),
+        source: this.parseSelectStatement(),
+      };
+      return stmt;
+    }
+
+    stmt.columnList = this.parseColumnList();
 
     if (this.upperAt() === "COMMENT") stmt.tableComment = this.parseCommentClause();
     if (this.upperAt() === "PARTITIONED") {

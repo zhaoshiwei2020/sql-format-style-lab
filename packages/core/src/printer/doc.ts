@@ -16,11 +16,27 @@
 export type Doc =
   | { kind: "text"; value: string }
   | { kind: "concat"; parts: Doc[] }
-  | { kind: "line"; mode: "soft" | "hard"; flat: string }
+  | { kind: "line"; mode: "soft" | "hard" | "fresh"; flat: string }
   | { kind: "indent"; by: number; content: Doc }
   | { kind: "group"; content: Doc }
   | { kind: "choice"; alternatives: Doc[] }
   | { kind: "ifBreak"; broken: Doc; flat: Doc }
+  /**
+   * Deferred end-of-line text: buffered and flushed immediately before the
+   * next emitted newline (or at end of render). Zero-width for both the fit
+   * test and column accounting — trailing `--` comments ride here so they can
+   * neither force a break of the code they annotate nor be pushed off their
+   * line by a synthesized separator (`,` lands before the comment).
+   */
+  | { kind: "lineSuffix"; content: string }
+  /**
+   * Zero-width, renders nothing, but counts as a hard line for the fit test
+   * and for containsHardLine — forces every enclosing group to lay out
+   * broken. Paired with lineSuffix for trailing line comments: the comment
+   * must not swallow following same-line code, so the surrounding layout has
+   * to provide a newline soon after.
+   */
+  | { kind: "breakParent" }
   /**
    * Renders its content forcibly flat (soft lines become their flat text) and
    * marks the layout unacceptable if a hard line occurs inside. Used for
@@ -43,6 +59,10 @@ export const softline = (flat = " "): Doc => ({ kind: "line", mode: "soft", flat
 /** Soft line that renders as nothing when flat (before closing parens). */
 export const softline0 = (): Doc => softline("");
 export const hardline = (): Doc => ({ kind: "line", mode: "hard", flat: "\n" });
+/** Newline only if the current line already carries content (never blank). */
+export const freshline = (): Doc => ({ kind: "line", mode: "fresh", flat: "\n" });
+export const lineSuffix = (content: string): Doc => ({ kind: "lineSuffix", content });
+export const breakParent = (): Doc => ({ kind: "breakParent" });
 export const indent = (content: Doc, by = 1): Doc => ({ kind: "indent", by, content });
 export const group = (content: Doc): Doc => ({ kind: "group", content });
 export const choice = (...alternatives: Doc[]): Doc => ({ kind: "choice", alternatives });
@@ -98,7 +118,7 @@ function fits(first: Frame, stack: Frame[], remaining: number): boolean {
         }
         break;
       case "line":
-        if (doc.mode === "hard") {
+        if (doc.mode === "hard" || doc.mode === "fresh") {
           // A hard line inside flat content forces the group to break;
           // in break-mode content that follows, the line ends → fits.
           return mode === "break";
@@ -106,6 +126,10 @@ function fits(first: Frame, stack: Frame[], remaining: number): boolean {
         if (mode === "break") return true; // reached a break point → line ends
         rem -= doc.flat.length;
         break;
+      case "lineSuffix":
+        break; // deferred text is width-exempt
+      case "breakParent":
+        return mode === "break"; // same as a hard line, minus the newline
       case "indent":
         work.push({ doc: doc.content, indentLevel: indentLevel + doc.by, mode });
         break;
@@ -132,6 +156,35 @@ interface RenderState {
   out: string[];
   col: number;
   maxColExceeded: boolean;
+  /** Deferred lineSuffix texts, flushed just before the next newline. */
+  suffix: string[];
+  /** Non-whitespace has been emitted on the current line. */
+  lineHasContent: boolean;
+  /** Consecutive newlines since the last content (2 = one blank line). */
+  newlineRun: number;
+}
+
+function pushText(state: RenderState, value: string, countWidth: boolean, opts: RenderOptions): void {
+  state.out.push(value);
+  if (countWidth) {
+    state.col += value.length;
+    if (state.col > opts.lineWidth) state.maxColExceeded = true;
+  }
+  if (/\S/.test(value)) {
+    state.lineHasContent = true;
+    state.newlineRun = 0;
+  }
+}
+
+function flushSuffix(state: RenderState): void {
+  for (const s of state.suffix) {
+    state.out.push(s);
+    if (/\S/.test(s)) {
+      state.lineHasContent = true;
+      state.newlineRun = 0;
+    }
+  }
+  state.suffix = [];
 }
 
 function renderInto(root: Frame, opts: RenderOptions, state: RenderState): void {
@@ -141,9 +194,13 @@ function renderInto(root: Frame, opts: RenderOptions, state: RenderState): void 
     const { doc, indentLevel, mode, strict } = frame;
     switch (doc.kind) {
       case "text":
-        state.out.push(doc.value);
-        state.col += doc.value.length;
-        if (state.col > opts.lineWidth) state.maxColExceeded = true;
+        pushText(state, doc.value, true, opts);
+        break;
+      case "lineSuffix":
+        state.suffix.push(doc.content);
+        break;
+      case "breakParent":
+        if (strict) state.maxColExceeded = true; // cannot stay flat
         break;
       case "concat":
         for (let i = doc.parts.length - 1; i >= 0; i--) {
@@ -151,7 +208,7 @@ function renderInto(root: Frame, opts: RenderOptions, state: RenderState): void 
         }
         break;
       case "line":
-        if (strict && doc.mode === "hard") {
+        if (strict && (doc.mode === "hard" || doc.mode === "fresh")) {
           // A hard line inside a flat-only region: keep the line flat and
           // mark the layout unacceptable so the choice rejects it.
           state.maxColExceeded = true;
@@ -159,17 +216,29 @@ function renderInto(root: Frame, opts: RenderOptions, state: RenderState): void 
           state.col += 1;
           break;
         }
-        if (doc.mode === "hard" || mode === "break") {
+        if (doc.mode === "hard" || doc.mode === "fresh" || mode === "break") {
+          const ind = " ".repeat(indentLevel * opts.indentSize);
+          if (!state.lineHasContent && (doc.mode === "fresh" || state.newlineRun >= 2)) {
+            // fresh on an empty line is a no-op; a hard line that would open
+            // a second consecutive blank line is capped. Either way, re-aim
+            // the pending indent at this frame's level.
+            const last = state.out.length - 1;
+            if (last >= 0 && /^\n[ \t]*$/.test(state.out[last]!)) {
+              state.out[last] = "\n" + ind;
+              state.col = ind.length;
+            }
+            break;
+          }
+          flushSuffix(state);
           // Trim trailing spaces on the finished line.
           const last = state.out.length - 1;
           if (last >= 0) state.out[last] = state.out[last]!.replace(/[ \t]+$/, "");
-          const ind = " ".repeat(indentLevel * opts.indentSize);
           state.out.push("\n" + ind);
           state.col = ind.length;
+          state.newlineRun += 1;
+          state.lineHasContent = false;
         } else {
-          state.out.push(doc.flat);
-          state.col += doc.flat.length;
-          if (state.col > opts.lineWidth) state.maxColExceeded = true;
+          pushText(state, doc.flat, true, opts);
         }
         break;
       case "indent":
@@ -189,7 +258,14 @@ function renderInto(root: Frame, opts: RenderOptions, state: RenderState): void 
         let chosen = doc.alternatives[doc.alternatives.length - 1]!;
         for (let i = 0; i < doc.alternatives.length - 1; i++) {
           const alt = doc.alternatives[i]!;
-          const trial: RenderState = { out: [], col: state.col, maxColExceeded: false };
+          const trial: RenderState = {
+            out: [],
+            col: state.col,
+            maxColExceeded: false,
+            suffix: [],
+            lineHasContent: state.lineHasContent,
+            newlineRun: state.newlineRun,
+          };
           renderInto({ doc: alt, indentLevel, mode: strict ? "flat" : "break", strict }, opts, trial);
           if (!trial.maxColExceeded) {
             chosen = alt;
@@ -210,8 +286,19 @@ function renderInto(root: Frame, opts: RenderOptions, state: RenderState): void 
 }
 
 export function render(doc: Doc, opts: RenderOptions): string {
-  const state: RenderState = { out: [], col: 0, maxColExceeded: false };
+  const state: RenderState = {
+    out: [],
+    col: 0,
+    maxColExceeded: false,
+    suffix: [],
+    lineHasContent: false,
+    // Start "as if" a blank line was just emitted: leading hard lines
+    // (e.g. blankLineBefore trivia on the first token) are capped away, so
+    // output never opens with blank lines.
+    newlineRun: 2,
+  };
   renderInto({ doc, indentLevel: 0, mode: "break" }, opts, state);
+  flushSuffix(state);
   // Normalize: no trailing spaces, single trailing newline.
   const textOut = state.out.join("");
   return (
@@ -219,6 +306,7 @@ export function render(doc: Doc, opts: RenderOptions): string {
       .split("\n")
       .map((l) => l.replace(/[ \t]+$/, ""))
       .join("\n")
+      .replace(/^\n+/, "")
       .replace(/\n+$/, "") + "\n"
   );
 }
@@ -228,8 +316,12 @@ export function containsHardLine(doc: Doc): boolean {
   switch (doc.kind) {
     case "text":
       return false;
+    case "lineSuffix":
+      return false;
+    case "breakParent":
+      return true;
     case "line":
-      return doc.mode === "hard";
+      return doc.mode === "hard" || doc.mode === "fresh";
     case "concat":
       return doc.parts.some(containsHardLine);
     case "indent":

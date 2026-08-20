@@ -12,8 +12,7 @@ select
                         <> coalesce(target_status, -999999)
                     or coalesce(source_created_time, '__NULL__')
                         <> coalesce(target_created_time, '__NULL__')
-                    or coalesce(source_amount, 0)
-                        <> coalesce(target_amount, 0)
+                    or coalesce(source_amount, 0) <> coalesce(target_amount, 0)
                 )
             then 1
             else 0
@@ -23,14 +22,9 @@ select
         case
             when
                 tax_status <> 'not_started'
-                and abs(
-                    contract_liability_closing
-                    - closing_balance / (1 + tax_rate)
-                ) > 0.01
-            then abs(
-                contract_liability_closing
-                - closing_balance / (1 + tax_rate)
-            )
+                and abs(contract_liability_closing - closing_balance / (1 + tax_rate))
+                    > 0.01
+            then abs(contract_liability_closing - closing_balance / (1 + tax_rate))
             else 0
         end
     ) as maximum_difference

@@ -19,7 +19,7 @@ node --experimental-strip-types packages/core/scripts/coverage-report.ts    # go
 2. **安全门禁不可绕过**：token preservation / structural fingerprint / 幂等，三关全过才写回。
 3. **契约文件**（tokens.ts / cst.ts / profile.ts / result.ts）改动要极其谨慎——lexer/parser/printer/safety 四方共享。
 4. **语料即事实**：fixtures/golden/case 必须逐字节通过；fixtures/golden-pending 是目标集；两份根目录 calibration .sql 是人工审定的审美源，**已知内部存在不一致**（详见 docs/divergence-report.md），分歧优先记报告、开 A/B 校准题，不要为单例过拟合加特判。
-5. lineWidth 默认 78（宽度扫描 75~80 的经验最优；Q1 用户暂定维持 78，dogfood 后可再调，见 docs/calibration-questions.md）。
+5. lineWidth 默认 88（Q1 终局拍板 2026-08-20，dogfood 实证：高频句式 cast(sum(x) / 100 as decimal(16, 2)) 落在 79~84 列，88 使其保持单行；见 docs/calibration-questions.md）。
 6. 第一批校准题 Q1~Q5 已全部拍板落地（2026-08-19，见 docs/calibration-questions.md 内标注）：golden 13/13、语料 42/42、golden-pending 29/29 全绿。后续新分歧仍走同一流程：先记 divergence-report、开 A/B 校准题，未经用户拍板不得改语料或加特判。
 
 ## 模块归属

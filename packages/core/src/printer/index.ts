@@ -39,6 +39,19 @@ function normalizeTrivia(file: SqlFile): void {
   for (let i = 0; i < tokens.length; i++) {
     const t = tokens[i]!;
     if (!isPunct(t)) continue;
+    // Trailing comment on synthesized punctuation (`a,  -- note`): it
+    // annotates the code BEFORE it, so it re-homes backward onto the
+    // immediately preceding token — but only when that token is a non-punct
+    // that the printer renders as the item's final text. Walking past an
+    // rparen would let a broken layout flush the suffix before the `)`,
+    // flipping comment order and tripping the preservation gate.
+    if (t.trailingComment && i > 0) {
+      const prev = tokens[i - 1]!;
+      if (!isPunct(prev) && !prev.trailingComment) {
+        prev.trailingComment = t.trailingComment;
+        delete (t as { trailingComment?: Comment }).trailingComment;
+      }
+    }
     const moved: Comment[] = [];
     if (t.leadingComments.length > 0) {
       moved.push(...t.leadingComments);

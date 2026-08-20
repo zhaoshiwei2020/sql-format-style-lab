@@ -15,10 +15,7 @@ select
                 )
                 when tax_start_month < report_month
                 then (
-                    opening_adjustment
-                    + purchase_amount
-                    - refund_amount
-                    + material_fee
+                    opening_adjustment + purchase_amount - refund_amount + material_fee
                 ) * coalesce(tax_rate, 0) / (
                     1 + coalesce(tax_rate, 0)
                 )
